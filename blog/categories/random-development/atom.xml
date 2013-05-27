@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: Random Development | initWithFunk:]]></title>
-  <link href="http://rubymaverick.github.io/initwithfunk/blog/categories/random-development/atom.xml" rel="self"/>
-  <link href="http://rubymaverick.github.io/initwithfunk/"/>
-  <updated>2013-05-26T21:05:34-04:00</updated>
-  <id>http://rubymaverick.github.io/initwithfunk/</id>
+  <link href="http://initwithfunk.com/blog/categories/random-development/atom.xml" rel="self"/>
+  <link href="http://initwithfunk.com/"/>
+  <updated>2013-05-26T21:17:39-04:00</updated>
+  <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[The Case of the WWDC Sellout]]></title>
-    <link href="http://rubymaverick.github.io/initwithfunk/blog/2013/05/26/the-case-of-the-wwdc-sellout/"/>
+    <link href="http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout/"/>
     <updated>2013-05-26T17:32:00-04:00</updated>
-    <id>http://rubymaverick.github.io/initwithfunk/blog/2013/05/26/the-case-of-the-wwdc-sellout</id>
+    <id>http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout</id>
     <content type="html"><![CDATA[<p>It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong.</p>
 
 <p>There is a bug in production.</p>

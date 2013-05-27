@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: Try iOS | initWithFunk:]]></title>
-  <link href="http://rubymaverick.github.io/initwithfunk/blog/categories/try-ios/atom.xml" rel="self"/>
-  <link href="http://rubymaverick.github.io/initwithfunk/"/>
-  <updated>2013-05-26T21:05:34-04:00</updated>
-  <id>http://rubymaverick.github.io/initwithfunk/</id>
+  <link href="http://initwithfunk.com/blog/categories/try-ios/atom.xml" rel="self"/>
+  <link href="http://initwithfunk.com/"/>
+  <updated>2013-05-26T21:17:39-04:00</updated>
+  <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Setting up KIF Integration Tests for iOS]]></title>
-    <link href="http://rubymaverick.github.io/initwithfunk/blog/2012/10/21/setting-up-kif-integration-tests-for-ios/"/>
+    <link href="http://initwithfunk.com/blog/2012/10/21/setting-up-kif-integration-tests-for-ios/"/>
     <updated>2012-10-21T12:03:00-04:00</updated>
-    <id>http://rubymaverick.github.io/initwithfunk/blog/2012/10/21/setting-up-kif-integration-tests-for-ios</id>
+    <id>http://initwithfunk.com/blog/2012/10/21/setting-up-kif-integration-tests-for-ios</id>
     <content type="html"><![CDATA[<p>Square released a pretty neat Integration Testing library called <a href="https://github.com/square/KIF">KIF</a> last year and we have been using it to test the challenges for our upcoming <a href="http://kickstarter.codeschool.com">Try iOS</a> course on <a href="http://www.codeschool.com/courses">Code School</a>.  The instructions in the KIF <a href="https://github.com/square/KIF/blob/master/README.md">README</a> on setting up an Xcode 4 project are missing a couple of crucial steps, and after much Googling and Stackoverflowing I finally figured out how to get it to work, so I figured I&rsquo;d share the process we are using for setting up KIF projects.</p>
 
 <p>I&rsquo;m assuming you already have an Xcode 4 (version 4.5.1) project that you want to add KIF to. First, if you aren&rsquo;t already working with an Xcode workspace, you will need to create one for this project.  To do so, choose the &ldquo;Save as Workspace&rdquo; menu item:</p>

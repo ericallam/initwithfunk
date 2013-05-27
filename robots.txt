@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: 
 
-Sitemap: http://rubymaverick.github.io/initwithfunk/sitemap.xml 
+Sitemap: http://initwithfunk.com/sitemap.xml 

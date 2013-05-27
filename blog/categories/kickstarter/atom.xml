@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: Kickstarter | initWithFunk:]]></title>
-  <link href="http://rubymaverick.github.io/initwithfunk/blog/categories/kickstarter/atom.xml" rel="self"/>
-  <link href="http://rubymaverick.github.io/initwithfunk/"/>
-  <updated>2013-05-26T21:05:34-04:00</updated>
-  <id>http://rubymaverick.github.io/initwithfunk/</id>
+  <link href="http://initwithfunk.com/blog/categories/kickstarter/atom.xml" rel="self"/>
+  <link href="http://initwithfunk.com/"/>
+  <updated>2013-05-26T21:17:39-04:00</updated>
+  <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Announcing Try Objective-C]]></title>
-    <link href="http://rubymaverick.github.io/initwithfunk/blog/2013/05/09/try-objective-c-and-learning-to-code/"/>
+    <link href="http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code/"/>
     <updated>2013-05-09T13:36:00-04:00</updated>
-    <id>http://rubymaverick.github.io/initwithfunk/blog/2013/05/09/try-objective-c-and-learning-to-code</id>
+    <id>http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code</id>
     <content type="html"><![CDATA[<p><img src="https://d1ffx7ull4987f.cloudfront.net/images/achievements/large_badge/246/completed-try-objective-c-d2ebeb17d5acfd77df0bf3ae3d2b89f7.png" alt="Badge" /></p>
 
 <p>Today we are releasing the free <a href="tryobjectivec.codeschool.com">Try Objective-C</a> course to our <a href="http://www.kickstarter.com/projects/eallam/try-ios-iphone-app-development-course">Kickstarter backers</a> and anyone else who wants to learn Objective-C, the language that powers iOS and Mac OS X apps.</p>
