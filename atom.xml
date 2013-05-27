@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-05-27T12:20:12-04:00</updated>
+  <updated>2013-05-27T12:39:03-04:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -18,7 +18,9 @@
     <link href="http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout/"/>
     <updated>2013-05-26T17:32:00-04:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout</id>
-    <content type="html"><![CDATA[<p>It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong.</p>
+    <content type="html"><![CDATA[<p><img src="http://i.imgur.com/A0WoI4T.jpg" /></p>
+
+<p>It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong.</p>
 
 <p>There is a bug in production.</p>
 
