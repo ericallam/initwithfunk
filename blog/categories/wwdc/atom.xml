@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: WWDC | initWithFunk:]]></title>
+  <link href="http://rubymaverick.github.io/initwithfunk/blog/categories/wwdc/atom.xml" rel="self"/>
+  <link href="http://rubymaverick.github.io/initwithfunk/"/>
+  <updated>2013-05-26T21:05:34-04:00</updated>
+  <id>http://rubymaverick.github.io/initwithfunk/</id>
+  <author>
+    <name><![CDATA[Eric Allam]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[The Case of the WWDC Sellout]]></title>
+    <link href="http://rubymaverick.github.io/initwithfunk/blog/2013/05/26/the-case-of-the-wwdc-sellout/"/>
+    <updated>2013-05-26T17:32:00-04:00</updated>
+    <id>http://rubymaverick.github.io/initwithfunk/blog/2013/05/26/the-case-of-the-wwdc-sellout</id>
+    <content type="html"><![CDATA[<p>It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong.</p>
+
+<p>There is a bug in production.</p>
+
+<p>Any programmer that has a modicum of experience shipping software knows this feeling, because programmers are the leading cause of bugs on Earth<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.  It&rsquo;s a terrible feeling and almost always leads to the worst day in a programmer&rsquo;s life up until that point<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<p>But very few of us have experienced a day quite like the day one or more programmers had when WWDC &ldquo;Sold Out&rdquo; a couple weeks ago. The sale should have been a complete success: unprecedented demand, a rabid group of developers with their credit cards in hand.  After only <a href="http://www.marco.org/2013/05/24/71-seconds">71 seconds</a> went by, the WWDC ticket site featured a prominent &ldquo;Sold Out&rdquo; banner and the dreams of thousands of developers were instantly crushed, yours truly included.</p>
+
+<p>But then, just a few hours later, something strange happened: developers started getting mysterious phone calls from Apple letting them know they had tickets for them. I was one of the those developers. I was there as the clock rendered<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> 10am PST and I was able to put a WWDC ticket in my Shopping Cart<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup>, but when I submitted the payment form I was greated with a 500 error and when I went back to the cart it was empty, and the tickets were sold out.  The Apple Developer support person who called me only said that they knew that I had tried to purchase a ticket for WWDC and they still had it available for me to purchase, and that I&rsquo;d be getting an email in the next 12 hours allowing me to grab it.</p>
+
+<p>There have been theories as to what happened, and Marco Arment <a href="http://www.marco.org/2013/05/24/71-seconds">just posted</a> his theory this weekend:</p>
+
+<p><blockquote><p>My best guess: some part of the infrastructure handling the purchases mistook 4,500 connections, transactions, or sessions for 4,500 sales. And when the front-end servers collapsed under the load of everyone hitting them at once — a first this year, since the availability time was preannounced — we all started refreshing, those connections started stacking up, and something on the back-end triggered the “Sold Out” state early because it was mistakenly counting all of those failed sessions</p></blockquote></p>
+
+<p>I think he&rsquo;s close but a little bit off. My guess is that there were multiple problems with their ticket reservation system. Reservation systems are very easy to screw up<sup id="fnref:5"><a href="#fn:5" rel="footnote">5</a></sup>, especially in distributed systems.</p>
+
+<p>Here is how I think it went down:</p>
+
+<p>All the tickets were reserved (by placing a ticket into the cart you&rsquo;d effectively &ldquo;reserve&rdquo; the ticket), and a majority of those reservations were fulfilled by the developer checking out and paying for the ticket.  The rest of the reservations were wrongly fulfilled when there was a bug in the checkout process that caused an exception somewhere in the distributed stack.  The checkout process failed in a way that isolated itself from the reservation system, so the final state was a fulfilled reservation, an empty cart, and an unpurchased ticket. What likely remained as evidence to the correct state of the system were log files scattered over dozens of servers and in a variety of formats.  That&rsquo;s why it took so long to start making the calls (according to anecdotal twitter reports and my own call, I&rsquo;m guessing it took 5+ hours to start making calls), and why Apple couldn&rsquo;t exactly make an immediate announcement as to what happened: they didn&rsquo;t know themselves.</p>
+
+<p>I don&rsquo;t envy the programmers who probably spent a couple sleepless nights figuring the mess out, and I am grateful that they&rsquo;ve been reaching out to developers to try and get them the tickets they deserve for WWDC.  As a first time attendant, I&rsquo;m looking forward to meeting some of Apple&rsquo;s best and brightest, and maybe buying them a beer or a cranberry juice, giving them a pat on the back, and letting them know that we&rsquo;ve been there, we knew how they were feeling, that something terrible happened but it&rsquo;s not the end of the world.</p>
+
+<p>There was a bug in production.<sup id="fnref:6"><a href="#fn:6" rel="footnote">6</a></sup></p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>Unproven hypothesis: I&rsquo;ve created more bugs than 99% of the population<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Programmers are very dramatic<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Clocks don&rsquo;t &ldquo;strike&rdquo; anymore, do they?<a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+<li id="fn:4">
+<p>We&rsquo;re going to need to rethink that metaphor soon. The Amazon Generation won&rsquo;t know what the hell we&rsquo;re talking about<a href="#fnref:4" rev="footnote">&#8617;</a></p></li>
+<li id="fn:5">
+<p>I know this because I&rsquo;ve written one and I screwed it up multiple times<a href="#fnref:5" rev="footnote">&#8617;</a></p></li>
+<li id="fn:6">
+<p>One can hope for WWDC 2013, amirite?<a href="#fnref:6" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
+  
+</feed>
