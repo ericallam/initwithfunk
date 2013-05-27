@@ -1,0 +1,170 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta name="google-site-verification" content="f1OtvP7JCHm6M9Ca7vMcFg3q-1NEOvDMcSKfKlVW_pA" />
+	<script data-cfasync="false" type="text/javascript" src="//use.typekit.net/axj3cfp.js"></script>
+	<script data-cfasync="false" type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>Announcing Try Objective-C  | initWithFunk:</title>
+
+<meta name="author" content="Eric Allam"> 
+
+<meta name="description" content="Today we are releasing the free Try Objective-C course to our Kickstarter backers and anyone else who wants to learn Objective-C, the language that &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/initwithfunk/atom.xml" rel="alternate" title="initWithFunk:" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/initwithfunk/favicon.png" rel="shortcut icon">
+	<link href="/initwithfunk/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" type="text/css" media="screen" />
+<script type="text/javascript" src="/fancybox/jquery.fancybox.pack.js"></script>
+
+<script language="Javascript" type="text/javascript">
+$(document).ready(
+  function() {
+    (function($) {
+      $(".fancybox[data-content-id]").each(function() {
+        this.href = $(this).data('content-id');
+      });
+      $(".fancybox").fancybox({
+        beforeLoad: function() {
+          var el, 
+              id = $(this.element).data('title-id');
+
+          if (id) {
+            el = $('#' + id);
+
+            if (el.length) {
+              this.title = el.html();
+            }
+          }
+          if ($(this).data('content')) {
+            this.content = $(this).data('content');
+          }
+        },
+        helpers: {
+          title: {
+            type: 'inside'
+          }
+        }
+      });
+    })(jQuery);
+  }
+);
+</script>
+	
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/initwithfunk/">initWithFunk:</a></h1>
+<h4>Disclaimer: opinions expressed below do not belong to <a href="http://twitter.com/eallam">Eric Allam</a></h4>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/initwithfunk/">Blog</a></li>
+	<li><a href="/initwithfunk/about">About</a></li>
+	<li><a href="/initwithfunk/portfolio">Portfolio</a></li>
+	<li><a href="/initwithfunk/archives">Archive</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:rubymaverick.github.io/initwithfunk">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">Announcing Try Objective-C</h2>
+	<div class="entry-content"><p><img src="https://d1ffx7ull4987f.cloudfront.net/images/achievements/large_badge/246/completed-try-objective-c-d2ebeb17d5acfd77df0bf3ae3d2b89f7.png" alt="Badge" /></p>
+
+<p>Today we are releasing the free <a href="tryobjectivec.codeschool.com">Try Objective-C</a> course to our <a href="http://www.kickstarter.com/projects/eallam/try-ios-iphone-app-development-course">Kickstarter backers</a> and anyone else who wants to learn Objective-C, the language that powers iOS and Mac OS X apps.</p>
+
+<p>When I first launched this Kickstarter project, I wasn&rsquo;t sure what kind of response we would get.  But after the first couple of days, it was clear that there were many, many people who wanted to learn how to build iOS apps. We were quickly met with a ton of requests for content for absolute beginners, people who had never coded before in their life but who desperately wanted to learn how to make iOS apps. I started work on an <a href="https://speakerdeck.com/rubymaverick/objective-c-primer-ft-mr-higgie">Objective-C Primer</a> to give beginners a chance at learning the language before starting on iOS.</p>
+
+<p>But Objective-C is a pretty complex beast of a language. And so we made it a &ldquo;stretch&rdquo; goal of the project to produce a full blown, free, Objective-C course.</p>
+
+<p>I didn&rsquo;t know what I&rsquo;d gotten us into.</p>
+
+<p>Being experienced programmers, sometimes it&rsquo;s easy losing sight of how hard this stuff can be. We make too many assumptions and end up alienating a bunch of determined learners who feel like they aren&rsquo;t being told the whole story. The problem is, the story is HUGE. Especially for a language like Objective-C. It&rsquo;s an old language with a lot of power, but with that power comes a high level of complexity.  Luckily, recent advances of the language (like auto-synthesized properties, object literals, and most of all ARC) have brought that complexity down to a level where it has become much easier to learn.</p>
+
+<p>The rise of the popularity and use of the App Store has resulted in an interested phenomena: tons of people are entering programming for the first time by trying to learn an incredibly hard language and framework.  We were reminded of this when we ran a private beta 4 weeks ago in our offices to help us with some feedback on the course and the content. We do private betas for all of our courses, and the beta for Try Objective-C had by far the most beginners of any beta we&rsquo;ve had.</p>
+
+<p>And unfortunately at that point our content was failing the true beginner. So we started over. We rewrote the entire course. The course we are releasing today gives the true beginner a really good shot at actually learning this language. It&rsquo;s not perfect, and it&rsquo;s definitely not easy, but it&rsquo;s the most approachable course we could have written.  And even though someone with experience in programming will most definitely start down the path of learning Objective-C and iOS with this course, it was written with someone else in mind. It was written for my brother the T-shirt printer, for my fiancée the scientist, for my friend who is a single mom, for my neighbor with all the crazy app ideas, for my dentist, for my friends, and for all the people who messaged me on Kickstarter, wanting desperately to learn a new skill, to make something meaningful, to feel like they too could become a programmer.</p>
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-05-09T13:36:00-04:00" pubdate data-updated="true">May 9<span>th</span>, 2013</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/initwithfunk/blog/categories/kickstarter/'>Kickstarter</a>, <a class='category' href='/initwithfunk/blog/categories/objective-c/'>Objective-C</a>, <a class='category' href='/initwithfunk/blog/categories/code/'>code</a>, <a class='category' href='/initwithfunk/blog/categories/ios/'>iOS</a>, <a class='category' href='/initwithfunk/blog/categories/learning/'>learning</a>
+
+
+</div>
+	
+</div></article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2013
+
+    Eric Allam
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/initwithfunk/javascripts/slash.js"></script>
+<script src="/initwithfunk/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+
+
+
+
+</body>
+</html>

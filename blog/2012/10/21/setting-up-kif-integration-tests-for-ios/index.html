@@ -6,11 +6,11 @@
 	<script data-cfasync="false" type="text/javascript" src="//use.typekit.net/axj3cfp.js"></script>
 	<script data-cfasync="false" type="text/javascript">try{Typekit.load();}catch(e){}</script>
 	<meta charset="utf-8">
-	<title>  | initWithFunk:</title>
+	<title>Setting up KIF Integration Tests for iOS  | initWithFunk:</title>
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="Today we are releasing the free Try Objective-C course to our Kickstarter backers and anyone else who wants to learn Objective-C, the language that &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="Square released a pretty neat Integration Testing library called KIF last year and we have been using it to test the challenges for our upcoming Try &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -88,72 +88,9 @@ $(document).ready(
 
 </header>
 
-	<div id="content" class="inner">
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/initwithfunk/blog/2013/05/09/try-objective-c-and-learning-to-code/">
-		
-			Announcing Try Objective-C</a>
-	</h2>
-	<div class="entry-content">
-		<p><img src="https://d1ffx7ull4987f.cloudfront.net/images/achievements/large_badge/246/completed-try-objective-c-d2ebeb17d5acfd77df0bf3ae3d2b89f7.png" alt="Badge" /></p>
-
-<p>Today we are releasing the free <a href="tryobjectivec.codeschool.com">Try Objective-C</a> course to our <a href="http://www.kickstarter.com/projects/eallam/try-ios-iphone-app-development-course">Kickstarter backers</a> and anyone else who wants to learn Objective-C, the language that powers iOS and Mac OS X apps.</p>
-
-<p>When I first launched this Kickstarter project, I wasn&rsquo;t sure what kind of response we would get.  But after the first couple of days, it was clear that there were many, many people who wanted to learn how to build iOS apps. We were quickly met with a ton of requests for content for absolute beginners, people who had never coded before in their life but who desperately wanted to learn how to make iOS apps. I started work on an <a href="https://speakerdeck.com/rubymaverick/objective-c-primer-ft-mr-higgie">Objective-C Primer</a> to give beginners a chance at learning the language before starting on iOS.</p>
-
-<p>But Objective-C is a pretty complex beast of a language. And so we made it a &ldquo;stretch&rdquo; goal of the project to produce a full blown, free, Objective-C course.</p>
-
-<p>I didn&rsquo;t know what I&rsquo;d gotten us into.</p>
-
-<p>Being experienced programmers, sometimes it&rsquo;s easy losing sight of how hard this stuff can be. We make too many assumptions and end up alienating a bunch of determined learners who feel like they aren&rsquo;t being told the whole story. The problem is, the story is HUGE. Especially for a language like Objective-C. It&rsquo;s an old language with a lot of power, but with that power comes a high level of complexity.  Luckily, recent advances of the language (like auto-synthesized properties, object literals, and most of all ARC) have brought that complexity down to a level where it has become much easier to learn.</p>
-
-<p>The rise of the popularity and use of the App Store has resulted in an interested phenomena: tons of people are entering programming for the first time by trying to learn an incredibly hard language and framework.  We were reminded of this when we ran a private beta 4 weeks ago in our offices to help us with some feedback on the course and the content. We do private betas for all of our courses, and the beta for Try Objective-C had by far the most beginners of any beta we&rsquo;ve had.</p>
-
-<p>And unfortunately at that point our content was failing the true beginner. So we started over. We rewrote the entire course. The course we are releasing today gives the true beginner a really good shot at actually learning this language. It&rsquo;s not perfect, and it&rsquo;s definitely not easy, but it&rsquo;s the most approachable course we could have written.  And even though someone with experience in programming will most definitely start down the path of learning Objective-C and iOS with this course, it was written with someone else in mind. It was written for my brother the T-shirt printer, for my fiancée the scientist, for my friend who is a single mom, for my neighbor with all the crazy app ideas, for my dentist, for my friends, and for all the people who messaged me on Kickstarter, wanting desperately to learn a new skill, to make something meaningful, to feel like they too could become a programmer.</p>
-
-		
-		
-	</div>
-
-
-<div class="meta">
-	<div class="date">
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-05-09T13:36:00-04:00" pubdate data-updated="true">May 9<span>th</span>, 2013</time></div>
-	<div class="tags">
-
-
-	<a class='category' href='/initwithfunk/blog/categories/kickstarter/'>Kickstarter</a>, <a class='category' href='/initwithfunk/blog/categories/objective-c/'>Objective-C</a>, <a class='category' href='/initwithfunk/blog/categories/code/'>code</a>, <a class='category' href='/initwithfunk/blog/categories/ios/'>iOS</a>, <a class='category' href='/initwithfunk/blog/categories/learning/'>learning</a>
-
-
-</div>
-	
-</div></article>
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/initwithfunk/blog/2012/10/21/setting-up-kif-integration-tests-for-ios/">
-		
-			Setting Up KIF Integration Tests for iOS</a>
-	</h2>
-	<div class="entry-content">
-		<p>Square released a pretty neat Integration Testing library called <a href="https://github.com/square/KIF">KIF</a> last year and we have been using it to test the challenges for our upcoming <a href="http://kickstarter.codeschool.com">Try iOS</a> course on <a href="http://www.codeschool.com/courses">Code School</a>.  The instructions in the KIF <a href="https://github.com/square/KIF/blob/master/README.md">README</a> on setting up an Xcode 4 project are missing a couple of crucial steps, and after much Googling and Stackoverflowing I finally figured out how to get it to work, so I figured I&rsquo;d share the process we are using for setting up KIF projects.</p>
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">Setting Up KIF Integration Tests for iOS</h2>
+	<div class="entry-content"><p>Square released a pretty neat Integration Testing library called <a href="https://github.com/square/KIF">KIF</a> last year and we have been using it to test the challenges for our upcoming <a href="http://kickstarter.codeschool.com">Try iOS</a> course on <a href="http://www.codeschool.com/courses">Code School</a>.  The instructions in the KIF <a href="https://github.com/square/KIF/blob/master/README.md">README</a> on setting up an Xcode 4 project are missing a couple of crucial steps, and after much Googling and Stackoverflowing I finally figured out how to get it to work, so I figured I&rsquo;d share the process we are using for setting up KIF projects.</p>
 
 <p>I&rsquo;m assuming you already have an Xcode 4 (version 4.5.1) project that you want to add KIF to. First, if you aren&rsquo;t already working with an Xcode workspace, you will need to create one for this project.  To do so, choose the &ldquo;Save as Workspace&rdquo; menu item:</p>
 
@@ -226,10 +163,7 @@ $(document).ready(
 <p><img src="http://f.cl.ly/items/0s3m3l0i0i2K0L2y3w1z/Resized%20Screen%202012-10-21%20at%2012.59.37%20PM.png" alt="image" />.</p>
 
 <p>Now you should be able to follow the rest of Square&rsquo;s instructions for adding the Controller, Scenario, and Step files to test your app in the &ldquo;Example&rdquo; section of their <a href="https://github.com/square/KIF/blob/master/README.md">README</a></p>
-
-		
-		
-	</div>
+</div>
 
 
 <div class="meta">
@@ -256,11 +190,20 @@ $(document).ready(
 	
 </div></article>
 
-<nav id="pagenavi">
-    
-    
-    <div class="center"><a href="/initwithfunk/archives">Blog Archives</a></div>
-</nav></div>
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
 	<footer id="footer" class="inner">Copyright &copy; 2013
 
     Eric Allam
