@@ -3,8 +3,8 @@ layout: post
 title: "The Case of the WWDC Sellout"
 date: 2013-05-26 17:32
 comments: true
-categories: 
-published: false
+categories: [WWDC, Random Development]
+published: true
 ---
 
 It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong. 
