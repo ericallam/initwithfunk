@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Xcode | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/xcode/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-05-27T12:46:50-04:00</updated>
+  <updated>2013-06-02T13:07:23-04:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,330 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Breaking Bad with DTrace]]></title>
+    <link href="http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace/"/>
+    <updated>2013-05-31T21:25:00-04:00</updated>
+    <id>http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace</id>
+    <content type="html"><![CDATA[<p>I&rsquo;ve spent an unwise amount of time recently on a problem that arose when me and my <a href="http://www.codeschool.com">Code School</a> colleagues were developing the challenges for our upcoming <a href="http://www.codeschool.com/paths/ios">course on MapKit</a>. All of the challenges assume that the user has given the app permission to use it&rsquo;s current location, and our <a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests in the simulator wouldn&rsquo;t work unless we could somehow programmatically confirm this alert box:</p>
+
+<p><img src="http://i.imgur.com/te7Spyj.jpg" style="width: 294px;" /></p>
+
+<p><a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests run in the simulator and are built to a different target, so using private API&rsquo;s isn&rsquo;t a problem (KIF wouldn&rsquo;t work unless it used a ton of private API&rsquo;s). <a href="https://twitter.com/puls">Jim Puls</a> from Square (the makers of KIF) was helpful enough to chime in <a href="https://groups.google.com/d/msg/kif-framework/_MffdyvMizU/hvbM6LJO7woJ">this thread</a> to share how they do it at Square: by <a href="http://darkdust.net/writings/objective-c/method-swizzling">method swizzling</a> the crap out of the <code>CLLocationManager</code> class, replacing <code>startUpdatingLocation</code>, <code>location</code>, and <code>locationServicesEnabled</code> with their own versions so the user location mechanics would be wholesale replaced, thus getting around the permission alert box.</p>
+
+<p>We followed their advice and ended up mocking out <code>CLLocationManager</code> (see how in <a href="https://gist.github.com/rubymaverick/5689235">this gist</a>) and it worked well enough, but I was unsatisfied that we had to mock out the entire location machinery just to get rid of that permissions alert box. It wasn&rsquo;t elegant code.</p>
+
+<p><blockquote><p>&hellip;perfection is finally attained not when there is no longer anything to add, but when there is no longer anything to take away&hellip;</p><footer><strong>Antoine de Saint-Exupéry <a href="http://english.stackexchange.com/questions/38837/where-does-this-translation-of-saint-exuperys-quote-on-design-come-from">http://english.stackexchange.com/questions/38837/where-does-this-translation-of-saint-exuperys-quote-on-design-come-from</a></strong></footer></blockquote></p>
+
+<p>I decided to keep searching for a more elegant solution and I started at what I thought was the most obvious place: <code>UIAlertView</code>.</p>
+
+<h3>Searching for UIAlertView</h3>
+
+<p>If I could find the code where the offending <code>UIAlertView</code> is actually created then I would know which code to mock out and hopefully bypass permissions. To do this, I could have swizzled some <code>UIAlertView</code> init methods or added a <a href="http://developer.apple.com/library/ios/#recipes/xcode_help-breakpoint_navigator/articles/adding_a_symbolic_breakpoint.html">symbolic breakpoint</a> in Xcode, but I had recently come across <a href="https://twitter.com/borkware">Mark Dalymple&rsquo;s</a> excellent three part series on DTrace (<a href="http://blog.bignerdranch.com/1907-hooked-on-dtrace-part-1/">1</a>, <a href="http://blog.bignerdranch.com/1968-hooked-on-dtrace-part-2/">2</a>, and <a href="http://blog.bignerdranch.com/2031-hooked-on-dtrace-part-3/">3</a>), and this seemed like a good opportunity to use it for a worthy real-world problem.</p>
+
+<p>I created a new blank iOS 6.0 project with a single <code>MKMapView</code> that wants to show the current user location (you can <a href="http://courseware.codeschool.com.s3.amazonaws.com/try_ios/TestingCurrentLocation.zip">⬇download the project here</a>). I built and ran the app for the simulator to verify that it brought up the alert box and to create a binary that I would later use in Instruments as a target for a custom DTrace instrument.</p>
+
+<p><img src="http://f.cl.ly/items/0f0U0g3L0u2y1f470g1e/iOS%20Simulator%20Screen%20shot%20Jun%201,%202013%2010.52.56%20AM.png" alt="location alert" /></p>
+
+<p>Instruments is powered by DTrace and by using it it made a couple of things easier, like launching an app in the simulator as it attached DTrace probes and logged the results, as well as a cleaner interface for viewing call stack information. To create custom DTrace probes in Instruments, start by opening Instruments from Xcode:</p>
+
+<p><img src="http://i.imgur.com/69FkXod.jpg" alt="open instruments" /></p>
+
+<p>And then create a new blank document:</p>
+
+<p><img src="http://i.imgur.com/RJeaV4F.jpg" alt="blank document" /></p>
+
+<p>Use <code>⌘B</code> to build a new instrument, and you should come across this screen:</p>
+
+<p><img src="http://i.imgur.com/9U3uHBU.jpg" alt="new instrument" /></p>
+
+<p>Which presents a nice interface for creating custom DTrace scripts.  To find all methods (class or instance) called on <code>UIAlertView</code>, I ended up with this:</p>
+
+<p><img src="http://i.imgur.com/EAj9EjF.jpg" alt="uialertview" /></p>
+
+<p>The part to pay attention to is this group of boxes here:</p>
+
+<p><img src="http://f.cl.ly/items/0R2S250R0b1m1y1P430i/Image%202013.06.01%2011%3A10%3A53%20AM.png" alt="group" /></p>
+
+<p>Next up I needed to the choose the target this instrument would run against</p>
+
+<p><img src="http://i.imgur.com/keNunJe.jpg" alt="target" /></p>
+
+<p>You have to pick the executable that was built for the simulator, which you can find in <code>~/Library/Application\ Support/iPhone\ Simulator/6.0/Applications/</code>. In there you might see many directories with randomly generated names:</p>
+
+<p><img src="http://i.imgur.com/NxLWCRN.jpg" alt="rando" /></p>
+
+<p>You&rsquo;ll have to dig through the noise to find the executable you want:</p>
+
+<p><img src="http://i.imgur.com/CeUjegf.jpg" alt="noise" /></p>
+
+<p>Now all that&rsquo;s left is to hit the record button and hope we can find out where that <code>UIAlertView</code> is being initialized:</p>
+
+<p><video id="eWX4nh-HFXM" class="sublime" width="640" height="360" data-uid="eWX4nh-HFXM" data-youtube-id="eWX4nh-HFXM" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/0Q3L1g1X1t2G1I0n2k1v/UIAlertViewCast1Poster.png">
+</video></p>
+
+<p>As you can see, there were 3 UIAlertView method calls that all came from <code>[UIWindow keyWindow]</code>, and one from a <code>performSelector</code>, but that doesn&rsquo;t help us much.  Let&rsquo;s update that probe to record both the module (in this case the class name), and the name of the method</p>
+
+<p><img src="http://i.imgur.com/VvkCSnX.jpg" alt="adding information" /></p>
+
+<p>Now it&rsquo;s a little easier to see what&rsquo;s going on.  It looks like <code>[UIWindow keyWindow]</code> calls private class method <code>+_alertWindow</code> on <code>UIAlertView</code>.</p>
+
+<p><img src="http://i.imgur.com/JLhoerL.jpg" alt="private" /></p>
+
+<p>Could this be where our location permissions alert box is being created. Fortunately, our instrument&rsquo;s probe automatically records the stack trace information for each of the events recorded.  To view the stack trace information, we just need to select an event and open the right hand side drawer:</p>
+
+<p><img src="http://f.cl.ly/items/3v3h0A3R3Q2Z24330N1n/Image%202013.06.02%2010%3A25%3A53%20AM.png" alt="stack trace" /></p>
+
+<p>The stack trace of the <code>_alertWindow</code> calls are all the same, and lead to a dead end. They don&rsquo;t seem to be related to location at all but instead are triggered on normal app startup routines.  The only other hit we got, <code>+_initializeSafeCategory</code>, is related to Accessibility and not location.</p>
+
+<p>This is a dead end.</p>
+
+<p>Well, not exactly.  Using DTrace I was able to eliminate the possibility that the <code>UIAlertView</code> was created inside the TestingCurrentLocation process, which means it has to be created in another process.  So I knew that somehow, my TestingCurrentLocation process was communicating with another outside process which was responsible for location permissions. Apple doesn&rsquo;t want to give app developers the chance of getting around the location permissions box for privacy reasons, so they would want to lock it down in another process.</p>
+
+<h3>The Mystery Process</h3>
+
+<p>So my next goal was to figure out what this mystery outside process was. I knew that my app process and the mystery process had to communicate, which led me to research the <a href="http://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html">XPC Services API</a> which &ldquo;provides a lightweight mechanism for basic interprocess communication integrated with Grand Central Dispatch (GCD) and launchd&rdquo; and is an integral part of <a href="http://developer.apple.com/library/mac/#documentation/Security/Conceptual/AppSandboxDesignGuide/AboutAppSandbox/AboutAppSandbox.html#//apple_ref/doc/uid/TP40011183">App Sandboxing</a>, so it seemed like an interested place to start.  I tried logging all methods called on parts of the Objective-C API, like <code>NSXPCConnection</code>, and <code>NSXPCInterface</code>, but there was nothing there. The next most obvious thing to probe was the c API, specifically the <a href="http://developer.apple.com/library/mac/#documentation/System/Reference/XPC_connection_header_reference/Reference/reference.html#//apple_ref/c/func/xpc_connection_create">xpc_connection_create</a> function. Here is how I created the probe I to log all the calls to <code>xpc_connection_create</code> with the caller and the <code>name</code> of the service with which to connect:</p>
+
+<p><video id="4z7meAsOgAQ" class="sublime" width="640" height="360" data-uid="4z7meAsOgAQ" data-youtube-id="4z7meAsOgAQ" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/113t1y2T07161b3e3a3U/xpc_connection_cast_poster.png">
+</video></p>
+
+<p>As you can see, probing this function turned out to bear some real fruit. It found a call to <code>xpc_connection_create</code> that was creating a connection to something named <code>com.apple.locationd.registration</code> and the call stack confirmed that this being triggered by setting the map to display the users location:</p>
+
+<p><img src="http://f.cl.ly/items/3F2e1x1L2p2c2X1c3a3R/Image%202013.06.02%2011%3A33%3A03%20AM.png" alt="xpc_connection_create results" /></p>
+
+<p>Running <code>sudo ps aux | grep locationd</code> showed that their was indeed a <code>locationd</code> process running in the simulator located at <code>/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec/locationd</code> (there was also one running at <code>/usr/libexec/locationd</code> which is the location daemon for Mac OS X.)</p>
+
+<h3>locationd</h3>
+
+<p>This gave me a new process to probe for information. But what should I look for?  I knew that if a user allowed an app in the simulator to get their location, they wouldn&rsquo;t be asked again even if the simulator was restarted (only by resetting the simulator would the location permissions alert box come up again).  So I knew that there had to be somewhere on the filesystem where locationd was storing the permission authorizations for simulator apps. If I could find this file (most likely a preferences file), I could possibly inject authorization for an app before it ever ran, thus never displaying the alert box even on the apps first run in the simulator.</p>
+
+<p>So how do I find what files the locationd process is opening and reading and writing to? Well, that&rsquo;s where the <code>syscall</code> DTrace provider comes in, which allows you to probe all system calls (like <code>open</code>, <code>read</code>, <code>write</code>, <code>chdir</code>, etc.).  This provider makes it really easy to find out which files a process is opening and writing to by probing the <code>open</code> and <code>write</code> functions.  For example, here is a DTrace script for printing out all the files opened by the <code>locationd</code> process:</p>
+
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>locationopens.d </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='d'><span class='line'><span class="n">syscall</span><span class="p">::</span><span class="n">open</span><span class="p">*:</span><span class="n">entry</span>
+</span><span class='line'><span class="p">/</span><span class="n">execname</span> <span class="p">==</span> <span class="p">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;/</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>   <span class="n">printf</span><span class="p">(&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span> <span class="n">open</span> <span class="p">%</span><span class="n">s</span><span class="s">\n</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">copyinstr</span><span class="p">(</span><span class="n">arg0</span><span class="p">));</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+
+<p>This script will trace all system calls to <code>open*</code> (<code>*</code> is a wildcard), but only on processes with the name &ldquo;locationd&rdquo; (the <code>/execname == "locationd"/</code> line defines a predicate for the probe). The code between the curly-braces is the action to perform on each match. Inside the curly-braces we are printing the first argument to <code>open</code>, which is the path of the file (to find out which arguments a system call takes, use <code>man 2 syscall</code> which in this case would be <code>man 2 open</code>).  We have to use <code>copyinstr</code> to copy data from the process into the kernel&rsquo;s address space (where DTrace runs).</p>
+
+<p>Running this with <code>dtrace -s locationopens.d</code> (make sure you have root priviledges: run <code>sudo -i</code> to start a new shell in root) and then running our TestingCurrentLocation app in the simulator results in a couple hundred lines that look like this:</p>
+
+<p>```</p>
+
+<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle</p>
+
+<p>  0    141                       open:entry locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Preferences/.GlobalPreferences.plist</p>
+
+<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj</p>
+
+<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/Base.lproj</p>
+
+<p>  0    141                       open:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings</p>
+
+<p>  0    141                       open:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.stringsdict</p>
+
+<p>```</p>
+
+<p>We can get rid of some of the noise by running dtrace with the <code>-q</code> option, like so:</p>
+
+<p><code>
+$ dtrace -q -s locationopens.d
+...snip a bunch of lines...
+locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Preferences/com.apple.locationd.plist
+locationd open /System/Library/CoreServices/ServerVersion.plist
+locationd open /System/Library/CoreServices/SystemVersion.plist
+locationd open /System/Library/CoreServices/SystemVersion.bundle
+locationd open /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec
+locationd open /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec/locationd
+...snip a bunch of lines...
+</code></p>
+
+<p>Okay that&rsquo;s a lot of file opens, and it would take awhile going through every single one looking for clues.  What I really want to know is: what files does locationd <em>write</em> to when a user taps the &ldquo;OK&rdquo; button in the location alert box, and what data does it write? For that we are going to need another DTrace script:</p>
+
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>locationwrites.d </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='d'><span class='line'><span class="n">syscall</span><span class="p">::</span><span class="n">write</span><span class="p">*:</span><span class="n">entry</span>
+</span><span class='line'><span class="p">/</span><span class="n">execname</span> <span class="p">==</span> <span class="p">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;/</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>   <span class="n">printf</span><span class="p">(&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span> <span class="n">write</span> <span class="p">%</span><span class="n">s</span><span class="s">\n\n</span><span class="p">%</span><span class="n">s</span><span class="s">\n\n</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">fds</span><span class="p">[</span><span class="n">arg0</span><span class="p">].</span><span class="n">fi_pathname</span><span class="p">,</span> <span class="n">copyinstr</span><span class="p">(</span><span class="n">arg1</span><span class="p">));</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+
+<p>Here we are tracing all calls to <code>write*</code> and printing out the path name using the first argument (arg0) which is a file descriptor (for more on using file descriptors in DTrace, read <a href="http://milek.blogspot.com/2005/07/file-descriptors-in-dtrace.html">this tutorial</a>). We are also printing out the second argument (arg1) which is a buffer of the contents written to the file. Now if we run the script just before we confirm we want to allow this app to use our current location, we will know where locationd is writing to save this information.</p>
+
+<p><video id="X29i348ea4I" class="sublime" width="640" height="360" data-uid="X29i348ea4I" data-youtube-id="X29i348ea4I" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/2X303t1A1s2C1Z243I0J/locationdwrites_poster.png">
+</video></p>
+
+<p>This results in just one trace match writing to a file at <code>??/locationd/clients.plist</code>. If we run the <code>locationopens.d</code> script again while grepping for <code>clients.plist</code> we can find the full path to this file:</p>
+
+<p><code>
+$ dtrace -q -s locationopens.d | grep 'clients.plist'
+locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Caches/locationd/clients.plist
+</code></p>
+
+<h3>The solution</h3>
+
+<p>When I opened this file for the first time I had to find someone in the office to high-five.  Here it was, the file that tells locationd, and thus apps in the simulator, whether or not the user has permitted use of location information.  I could convert the <code>clients.plist</code> file into xml using <code>plutil -convert xml1 clients.plist</code> and then open it up and see what was inside:</p>
+
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>clients.plist </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="ni">&amp;lt;</span>?xml version=<span class="ni">&amp;ldquo;</span>1.0<span class="ni">&amp;rdquo;</span> encoding=<span class="ni">&amp;ldquo;</span>UTF-8<span class="ni">&amp;rdquo;</span>?&gt;
+</span><span class='line'><span class="ni">&amp;lt;</span>!DOCTYPE plist PUBLIC <span class="ni">&amp;ldquo;&amp;ndash;</span>//Apple//DTD PLIST 1.0//EN<span class="ni">&amp;rdquo;</span> <span class="ni">&amp;ldquo;</span><span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">&quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;</span><span class="nt">&gt;</span>http://www.apple.com/DTDs/PropertyList-1.0.dtd<span class="nt">&lt;/a&gt;</span><span class="ni">&amp;rdquo;</span>&gt;
+</span><span class='line'><span class="nt">&lt;plist</span> <span class="na">version=</span><span class="s">&quot;1.0&quot;</span><span class="nt">&gt;</span>
+</span><span class='line'><span class="nt">&lt;dict&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;key&gt;</span>com.codeschool.TestingCurrentLocation<span class="nt">&lt;/key&gt;</span>
+</span><span class='line'>  <span class="nt">&lt;dict&gt;&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nt">&lt;pre&gt;&lt;code&gt;</span><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Authorized<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>true/<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>BundleId<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>com.codeschool.TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Executable<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>/Users/eric/Library/Application Support/iPhone Simulator/6.0/Applications/D2700670-4F2D-4A4B-A881-695E9812CB86/TestingCurrentLocation.app/TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>LocationTimeStopped<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>real<span class="ni">&amp;gt;</span>391883613.42615497<span class="ni">&amp;lt;</span>/real<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Registered<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>/Users/eric/Library/Application Support/iPhone Simulator/6.0/Applications/D2700670-4F2D-4A4B-A881-695E9812CB86/TestingCurrentLocation.app/TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Whitelisted<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="ni">&amp;lt;</span>false/<span class="ni">&amp;gt;</span>
+</span><span class='line'><span class="nt">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nt">&lt;p&gt;</span>  <span class="nt">&lt;/dict&gt;</span>
+</span><span class='line'><span class="nt">&lt;/dict&gt;</span>
+</span><span class='line'><span class="nt">&lt;/plist&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+
+<p>Property List&rsquo;s (.plist) are a strange format but not impossible to read. The real important bit seemed to be the <code>Authorized</code> key which was set to <code>&lt;true/&gt;</code>.  I tried changing that to <code>&lt;false/&gt;</code> and rerunning the app in the simulator and my app no longer had access to location information and also didn&rsquo;t bring up the location permission alert box. If I removed the entire <code>&lt;dict&gt;&lt;/dict&gt;</code> block representing my app, the location permission alert box would show back up the next time I ran the app in the simulator.</p>
+
+<p>I now had full control over that location alert box. All I had to do was write over the <code>clients.plist</code> file with the xml already crafted in a way to give my app access to location information. For our upcoming MapKit course, we&rsquo;re doing it inside our executor server (which is written in ruby), kind of like this:</p>
+
+<p><div class='bogus-wrapper'><notextile><figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">write_out_location_plist_hack!</span>
+</span><span class='line'>  <span class="n">plist</span> <span class="o">=</span> <span class="sx">%{</span>
+</span><span class='line'><span class="sx">&amp;lt;?xml version=&amp;ldquo;1.0&amp;rdquo; encoding=&amp;ldquo;UTF-8&amp;rdquo;?&gt;</span>
+</span><span class='line'><span class="sx">&amp;lt;!DOCTYPE plist PUBLIC &amp;ldquo;&amp;ndash;//Apple//DTD PLIST 1.0//EN&amp;rdquo; &amp;ldquo;&lt;a href=&quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;http://www.apple.com/DTDs/PropertyList-1.0.dtd&lt;/a&gt;&amp;rdquo;&gt;</span>
+</span><span class='line'><span class="sx">&lt;plist version=&quot;1.0&quot;&gt;</span>
+</span><span class='line'><span class="sx">&lt;dict&gt;</span>
+</span><span class='line'><span class="sx">  &lt;key&gt;com.codeschool.</span><span class="si">#{</span><span class="vi">@project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="sx">&lt;/key&gt;</span>
+</span><span class='line'><span class="sx">  &lt;dict&gt;&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sx">&lt;pre&gt;&lt;code&gt;&amp;lt;key&amp;gt;Authorized&amp;lt;/key&amp;gt;</span>
+</span><span class='line'><span class="sx">&amp;lt;true/&amp;gt;</span>
+</span><span class='line'><span class="sx">&amp;lt;key&amp;gt;BundleId&amp;lt;/key&amp;gt;</span>
+</span><span class='line'><span class="sx">&amp;lt;string&amp;gt;com.codeschool.</span><span class="si">#{</span><span class="vi">@project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="sx">&amp;lt;/string&amp;gt;</span>
+</span><span class='line'><span class="sx">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sx">&lt;p&gt;  &lt;/dict&gt;</span>
+</span><span class='line'><span class="sx">&lt;/dict&gt;</span>
+</span><span class='line'><span class="sx">&lt;/plist&gt;</span>
+</span><span class='line'><span class="sx">}</span><span class="o">.</span><span class="n">strip</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;  clients_plist = File.join(&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="no">File</span><span class="o">.</span><span class="n">expand_path</span><span class="p">(</span><span class="s2">&quot;~&quot;</span><span class="p">),</span>
+</span><span class='line'><span class="s2">&quot;Library&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;Application Support&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;iPhone Simulator&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;6.0&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;Library&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;Caches&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;locationd&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="s2">&quot;clients.plist&quot;</span>
+</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="p">)</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;  File.open(clients_plist, &amp;ldquo;w+&amp;rdquo;) do |file|&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">file</span><span class="o">.</span><span class="n">puts</span> <span class="n">plist</span>
+</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+
+<p>The code above runs before the app is launched in the simulator, and it works perfectly. We were able to get rid of the nasty <a href="https://gist.github.com/rubymaverick/5689235">CLLocationManager mocking</a> and I was finally able to move on to something more productive.</p>
+
+<p>But trying to solve this problem did lead me to learn a lot more about DTrace. Before, DTrace just seemed like this magical thing used by superhero programmers. Now that I&rsquo;ve used it so solve a real problem, it&rsquo;s not so magical anymore, and I am already starting to think of other problems I could solve using it that I wouldn&rsquo;t have been able to before. I hope that by writing about how I used DTrace to solve this problem, it will lead you to try it out the next time you are stuck on something similar.  If you do, please let me know how you did by getting in touch with me on my <a href="http://twitter.com/eallam">twitter</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Setting up KIF Integration Tests for iOS]]></title>
