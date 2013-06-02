@@ -4,7 +4,7 @@
   <title><![CDATA[Category: debugging | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/debugging/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-06-02T13:07:23-04:00</updated>
+  <updated>2013-06-02T13:19:10-04:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -18,7 +18,9 @@
     <link href="http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace/"/>
     <updated>2013-05-31T21:25:00-04:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace</id>
-    <content type="html"><![CDATA[<p>I&rsquo;ve spent an unwise amount of time recently on a problem that arose when me and my <a href="http://www.codeschool.com">Code School</a> colleagues were developing the challenges for our upcoming <a href="http://www.codeschool.com/paths/ios">course on MapKit</a>. All of the challenges assume that the user has given the app permission to use it&rsquo;s current location, and our <a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests in the simulator wouldn&rsquo;t work unless we could somehow programmatically confirm this alert box:</p>
+    <content type="html"><![CDATA[<p><em>If you have any feedback on this article, please contact me on <a href="http://twitter.com/eallam">twitter</a></em></p>
+
+<p>I&rsquo;ve spent an unwise amount of time recently on a problem that arose when me and my <a href="http://www.codeschool.com">Code School</a> colleagues were developing the challenges for our upcoming <a href="http://www.codeschool.com/paths/ios">course on MapKit</a>. All of the challenges assume that the user has given the app permission to use it&rsquo;s current location, and our <a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests in the simulator wouldn&rsquo;t work unless we could somehow programmatically confirm this alert box:</p>
 
 <p><img src="http://i.imgur.com/te7Spyj.jpg" style="width: 294px;" /></p>
 
