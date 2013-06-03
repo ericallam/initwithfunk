@@ -7,6 +7,8 @@ categories: [WWDC, Random Development]
 published: true
 ---
 
+<img src="http://i.imgur.com/A0WoI4T.jpg" />
+
 It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong. 
 
 There is a bug in production.
@@ -27,9 +29,9 @@ I think he's close but a little bit off. My guess is that there were multiple pr
 
 Here is how I think it went down:
 
-All the tickets were reserved (by placing a ticket into the cart you'd effectively "reserve" the ticket), and a majority of those reservations were fulfilled by the developer checking out and paying for the ticket.  The rest of the reservations were wrongly fulfilled when there was a bug in the checkout process that caused an exception somewhere in the distributed stack.  The checkout process failed in a way that isolated itself from the reservation system, so the final state was a fulfilled reservation, an empty cart, and an unpurchased ticket. What likely remained as evidence to the correct state of the system were log files scattered over dozens of servers and in a variety of formats.  That's why it took so long to start making the calls (according to anecdotal twitter reports and my own call, I'm guessing it took 5+ hours to start making calls), and why Apple couldn't exactly make an immediate announcement as to what happened: they didn't know themselves. 
+All the tickets were reserved (by placing a ticket into the cart you'd effectively "reserve" the ticket), and a majority of those reservations were fulfilled by the developer checking out and paying for the ticket.  The rest of the reservations were wrongly fulfilled when there was a bug in the checkout process that caused an exception somewhere in the distributed stack.  The checkout process failed in a way that isolated itself from the reservation system, so the final state was a fulfilled reservation, an empty cart, and an unpurchased ticket. What likely remained as evidence to the correct state of the system were log files scattered over dozens of servers and in a variety of formats.  That's why it took so long to begin calling (according to anecdotal twitter reports and my own call, I'm guessing it took 5+ hours), and why Apple couldn't make an immediate announcement as to what happened: they didn't know themselves. 
 
-I don't envy the programmers who probably spent a couple sleepless nights figuring the mess out, and I am grateful that they've been reaching out to developers to try and get them the tickets they deserve for WWDC.  As a first time attendant, I'm looking forward to meeting some of Apple's best and brightest, and maybe buying them a beer or a cranberry juice, giving them a pat on the back, and letting them know that we've been there, we knew how they were feeling, that something terrible happened but it's not the end of the world.
+I don't envy the programmers who probably spent a couple sleepless nights figuring the mess out, and I am grateful that they've been reaching out to developers to try and get them the tickets they deserve for WWDC.  As a first-time attendant, I'm looking forward to meeting an Apple engineer or two, and maybe buying them a beer or a cranberry juice, giving them a pat on the back, and letting them know that we've been there, we knew how they were feeling, that something terrible happened but it's not the end of the world.
 
 There was a bug in production.[^6]
 
