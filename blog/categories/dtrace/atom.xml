@@ -4,7 +4,7 @@
   <title><![CDATA[Category: DTrace | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/dtrace/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-06-02T13:19:10-04:00</updated>
+  <updated>2013-06-14T16:45:01-07:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -16,7 +16,7 @@
   <entry>
     <title type="html"><![CDATA[Breaking Bad with DTrace]]></title>
     <link href="http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace/"/>
-    <updated>2013-05-31T21:25:00-04:00</updated>
+    <updated>2013-05-31T21:25:00-07:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace</id>
     <content type="html"><![CDATA[<p><em>If you have any feedback on this article, please contact me on <a href="http://twitter.com/eallam">twitter</a></em></p>
 
@@ -42,35 +42,35 @@
 
 <p>Instruments is powered by DTrace and by using it it made a couple of things easier, like launching an app in the simulator as it attached DTrace probes and logged the results, as well as a cleaner interface for viewing call stack information. To create custom DTrace probes in Instruments, start by opening Instruments from Xcode:</p>
 
-<p><img src="http://i.imgur.com/69FkXod.jpg" alt="open instruments" /></p>
+<p><img src="http://f.cl.ly/items/381E422c0X0m2d1u1i2D/69FkXod.jpg" alt="open instruments" /></p>
 
 <p>And then create a new blank document:</p>
 
-<p><img src="http://i.imgur.com/RJeaV4F.jpg" alt="blank document" /></p>
+<p><img src="http://f.cl.ly/items/2G2M3i2j0P471n1U1p2a/RJeaV4F.jpg" alt="blank document" /></p>
 
 <p>Use <code>⌘B</code> to build a new instrument, and you should come across this screen:</p>
 
-<p><img src="http://i.imgur.com/9U3uHBU.jpg" alt="new instrument" /></p>
+<p><img src="http://f.cl.ly/items/3s3D2j3y121H3y1e281O/9U3uHBU.jpg" alt="new instrument" /></p>
 
 <p>Which presents a nice interface for creating custom DTrace scripts.  To find all methods (class or instance) called on <code>UIAlertView</code>, I ended up with this:</p>
 
-<p><img src="http://i.imgur.com/EAj9EjF.jpg" alt="uialertview" /></p>
+<p><img src="http://f.cl.ly/items/170M3h0v1q2Z2R2t0F1y/EAj9EjF.jpg" alt="uialertview" /></p>
 
 <p>The part to pay attention to is this group of boxes here:</p>
 
-<p><img src="http://f.cl.ly/items/0R2S250R0b1m1y1P430i/Image%202013.06.01%2011%3A10%3A53%20AM.png" alt="group" /></p>
+<p><img src="http://f.cl.ly/items/1Z2z0s0N1i2Y0V0E0324/Image%202013.06.01%2011-10-53%20AM.png" alt="group" /></p>
 
 <p>Next up I needed to the choose the target this instrument would run against</p>
 
-<p><img src="http://i.imgur.com/keNunJe.jpg" alt="target" /></p>
+<p><img src="http://f.cl.ly/items/260L3c2v0u2l201Y1r1c/keNunJe.jpg" alt="target" /></p>
 
 <p>You have to pick the executable that was built for the simulator, which you can find in <code>~/Library/Application\ Support/iPhone\ Simulator/6.0/Applications/</code>. In there you might see many directories with randomly generated names:</p>
 
-<p><img src="http://i.imgur.com/NxLWCRN.jpg" alt="rando" /></p>
+<p><img src="http://f.cl.ly/items/1F1W220Y2y0C3Q050H47/NxLWCRN.jpg" alt="rando" /></p>
 
 <p>You&rsquo;ll have to dig through the noise to find the executable you want:</p>
 
-<p><img src="http://i.imgur.com/CeUjegf.jpg" alt="noise" /></p>
+<p><img src="http://f.cl.ly/items/0Y2A152N1R1D0N1c2l2Q/CeUjegf.jpg" alt="noise" /></p>
 
 <p>Now all that&rsquo;s left is to hit the record button and hope we can find out where that <code>UIAlertView</code> is being initialized:</p>
 
@@ -87,7 +87,7 @@
 
 <p>Could this be where our location permissions alert box is being created. Fortunately, our instrument&rsquo;s probe automatically records the stack trace information for each of the events recorded.  To view the stack trace information, we just need to select an event and open the right hand side drawer:</p>
 
-<p><img src="http://f.cl.ly/items/3v3h0A3R3Q2Z24330N1n/Image%202013.06.02%2010%3A25%3A53%20AM.png" alt="stack trace" /></p>
+<p><img src="http://f.cl.ly/items/1a213E110a453F3G3T25/Image%202013.06.02%2010-25-53%20AM.png" alt="stack trace" /></p>
 
 <p>The stack trace of the <code>_alertWindow</code> calls are all the same, and lead to a dead end. They don&rsquo;t seem to be related to location at all but instead are triggered on normal app startup routines.  The only other hit we got, <code>+_initializeSafeCategory</code>, is related to Accessibility and not location.</p>
 
@@ -104,7 +104,7 @@
 
 <p>As you can see, probing this function turned out to bear some real fruit. It found a call to <code>xpc_connection_create</code> that was creating a connection to something named <code>com.apple.locationd.registration</code> and the call stack confirmed that this being triggered by setting the map to display the users location:</p>
 
-<p><img src="http://f.cl.ly/items/3F2e1x1L2p2c2X1c3a3R/Image%202013.06.02%2011%3A33%3A03%20AM.png" alt="xpc_connection_create results" /></p>
+<p><img src="http://f.cl.ly/items/062c1J2g3S0v2x1A0z2c/Image%202013.06.02%2011-33-03%20AM.png" alt="xpc_connection_create results" /></p>
 
 <p>Running <code>sudo ps aux | grep locationd</code> showed that their was indeed a <code>locationd</code> process running in the simulator located at <code>/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec/locationd</code> (there was also one running at <code>/usr/libexec/locationd</code> which is the location daemon for Mac OS X.)</p>
 
