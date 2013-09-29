@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="If you have any feedback on this article, please contact me on twitter I&rsquo;ve spent an unwise amount of time recently on a problem that arose &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="A little known addition to iOS 7 makes rendering markdown to a UITextView really simple. The UIKit Additions to NSAttributedString now includes a &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,125 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7/">
+		
+			Easy Markdown Rendering With NSAttributedString on iOS 7</a>
+	</h2>
+	<div class="entry-content">
+		<p>A little known addition to iOS 7 makes rendering markdown to a <code>UITextView</code> really simple. The <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/NSAttributedString_UIKit_Additions/Reference/Reference.html#//apple_ref/doc/uid/TP40011688">UIKit Additions</a> to <a href="https://developer.apple.com/library/ios/documentation/cocoa/reference/foundation/Classes/NSAttributedString_Class/Reference/Reference.html">NSAttributedString</a> now includes a document type option called <code>NSHTMLTextDocumentType</code> that does exactly what you&rsquo;d expect: it allows you to easily render HTML in a <code>UITextView</code>, <code>UILabel</code>, or <code>UITextField</code>. So if we combine the new document type with a markdown parser, we can go from this:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>A First Level Header
+</span><span class='line'>====================
+</span><span class='line'>
+</span><span class='line'>## A smaller header
+</span><span class='line'>
+</span><span class='line'>**Now** is the time for all *good men* to come to
+</span><span class='line'>the aid of their country. This is an `NSAttributedString`.
+</span><span class='line'>
+</span><span class='line'>Brought to you by [Eric Allam](http://twitter.com/eallam)
+</span><span class='line'>
+</span><span class='line'>### Header 3
+</span><span class='line'>
+</span><span class='line'>*   Candy.
+</span><span class='line'>*   Gum.
+</span><span class='line'>*   Booze.
+</span><span class='line'>
+</span><span class='line'>![eallam twitter profile](https://si0.twimg.com/profile_images/3066111745/97865436e3ef039bc7c2420fe5be366e.png)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To this:</p>
+
+<p><img src="http://f.cl.ly/items/2W3006463n0S1V183Y1n/iOS%20Simulator%20Screen%20shot%20Sep%2029,%202013,%209.39.58%20AM.png" alt="Alt Text" width="320"></p>
+
+<p>With only a couple of lines of code.</p>
+
+<p>First, you need a markdown parser which will take a markdown formatted string and turn it into HTML. For this example we are going to be using <a href="https://github.com/mdiep/MMMarkdown">MMMarkdown</a>.</p>
+
+<p><code>MMMarkdown</code> makes it extremely simple to turn some markdown into HTML. If we had the markdown above in a file called <code>Example.md</code> in our project, you can turn it into HTML like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">markdown</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSString</span> <span class="nl">stringWithContentsOfFile:</span><span class="p">[[</span><span class="n">NSBundle</span> <span class="n">mainBundle</span><span class="p">]</span> <span class="nl">pathForResource:</span><span class="s">@&quot;Example&quot;</span> <span class="nl">ofType:</span><span class="s">@&quot;md&quot;</span><span class="p">]</span>  <span class="nl">encoding:</span><span class="n">NSUTF8StringEncoding</span> <span class="nl">error:</span><span class="nb">nil</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">html</span> <span class="o">=</span> <span class="p">[</span><span class="n">MMMarkdown</span> <span class="nl">HTMLStringWithMarkdown:</span><span class="n">markdown</span> <span class="nl">error:</span><span class="nb">nil</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then, once you have the HTML, just create the <code>NSAttributedString</code> like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSDictionary</span> <span class="o">*</span><span class="n">options</span> <span class="o">=</span> <span class="err">@</span><span class="p">{</span><span class="nl">NSDocumentTypeDocumentAttribute:</span> <span class="n">NSHTMLTextDocumentType</span><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">NSAttributedString</span> <span class="o">*</span><span class="n">preview</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NSAttributedString</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithData:</span><span class="p">[</span><span class="n">_html</span> <span class="nl">dataUsingEncoding:</span><span class="n">NSUTF8StringEncoding</span><span class="p">]</span> <span class="nl">options:</span><span class="n">options</span> <span class="nl">documentAttributes:</span><span class="nb">nil</span> <span class="nl">error:</span><span class="o">&amp;</span><span class="n">error</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now all you have to do is set the <code>attributedText</code> property on a TextKit backed view (e.g. <code>UITextView</code>), like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UITextView</span> <span class="o">*</span><span class="n">liveView</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UITextView</span> <span class="n">alloc</span><span class="p">]</span> <span class="n">init</span><span class="p">];</span>
+</span><span class='line'><span class="n">liveView</span><span class="p">.</span><span class="n">attributedText</span> <span class="o">=</span> <span class="n">preview</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This doesn&rsquo;t mean the <code>UITextView</code> can display all the HTML you throw at it. Stylesheets have no effect (although certain CSS styles do seem to work, but it&rsquo;s not documented anywhere what is supported and what is not). If you do want to display a full web page, you could of course always use <code>UIWebView</code> instead.</p>
+
+<p>I&rsquo;ve uploaded an example project that demonstrating how to put this all together called <a href="https://github.com/rubymaverick/MarkyMark">MarkyMark</a> (the naming of this repo happened to coincide with a viewing of Pain and Gain).</p>
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-09-29T09:55:00-04:00" pubdate data-updated="true">Sep 29<span>th</span>, 2013</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/html/'>HTML</a>, <a class='category' href='/blog/categories/markdown/'>Markdown</a>, <a class='category' href='/blog/categories/textkit/'>TextKit</a>, <a class='category' href='/blog/categories/ios7/'>iOS7</a>
+
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
@@ -411,7 +530,7 @@
   
 
 
-<time datetime="2013-05-31T21:25:00-07:00" pubdate data-updated="true">May 31<span>st</span>, 2013</time></div>
+<time datetime="2013-05-31T21:25:00-04:00" pubdate data-updated="true">May 31<span>st</span>, 2013</time></div>
 	<div class="tags">
 
 
@@ -494,7 +613,7 @@
   
 
 
-<time datetime="2013-05-26T17:32:00-07:00" pubdate data-updated="true">May 26<span>th</span>, 2013</time></div>
+<time datetime="2013-05-26T17:32:00-04:00" pubdate data-updated="true">May 26<span>th</span>, 2013</time></div>
 	<div class="tags">
 
 
@@ -548,7 +667,7 @@
   
 
 
-<time datetime="2013-05-09T13:36:00-07:00" pubdate data-updated="true">May 9<span>th</span>, 2013</time></div>
+<time datetime="2013-05-09T13:36:00-04:00" pubdate data-updated="true">May 9<span>th</span>, 2013</time></div>
 	<div class="tags">
 
 
@@ -660,7 +779,7 @@
   
 
 
-<time datetime="2012-10-21T12:03:00-07:00" pubdate data-updated="true">Oct 21<span>st</span>, 2012</time></div>
+<time datetime="2012-10-21T12:03:00-04:00" pubdate data-updated="true">Oct 21<span>st</span>, 2012</time></div>
 	<div class="tags">
 
 

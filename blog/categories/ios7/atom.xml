@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: iOS7 | initWithFunk:]]></title>
+  <link href="http://initwithfunk.com/blog/categories/ios7/atom.xml" rel="self"/>
+  <link href="http://initwithfunk.com/"/>
+  <updated>2013-09-29T10:02:30-04:00</updated>
+  <id>http://initwithfunk.com/</id>
+  <author>
+    <name><![CDATA[Eric Allam]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Easy Markdown rendering with NSAttributedString on iOS 7]]></title>
+    <link href="http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7/"/>
+    <updated>2013-09-29T09:55:00-04:00</updated>
+    <id>http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7</id>
+    <content type="html"><![CDATA[<p>A little known addition to iOS 7 makes rendering markdown to a <code>UITextView</code> really simple. The <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/NSAttributedString_UIKit_Additions/Reference/Reference.html#//apple_ref/doc/uid/TP40011688">UIKit Additions</a> to <a href="https://developer.apple.com/library/ios/documentation/cocoa/reference/foundation/Classes/NSAttributedString_Class/Reference/Reference.html">NSAttributedString</a> now includes a document type option called <code>NSHTMLTextDocumentType</code> that does exactly what you&rsquo;d expect: it allows you to easily render HTML in a <code>UITextView</code>, <code>UILabel</code>, or <code>UITextField</code>. So if we combine the new document type with a markdown parser, we can go from this:</p>
+
+<p>```</p>
+
+<h1>A First Level Header</h1>
+
+<h2>A smaller header</h2>
+
+<p><strong>Now</strong> is the time for all <em>good men</em> to come to
+the aid of their country. This is an <code>NSAttributedString</code>.</p>
+
+<p>Brought to you by <a href="http://twitter.com/eallam">Eric Allam</a></p>
+
+<h3>Header 3</h3>
+
+<ul>
+<li>Candy.</li>
+<li>Gum.</li>
+<li>Booze.</li>
+</ul>
+
+
+<p><img src="https://si0.twimg.com/profile_images/3066111745/97865436e3ef039bc7c2420fe5be366e.png" alt="eallam twitter profile" />
+```</p>
+
+<p>To this:</p>
+
+<p><img src="http://f.cl.ly/items/2W3006463n0S1V183Y1n/iOS%20Simulator%20Screen%20shot%20Sep%2029,%202013,%209.39.58%20AM.png" alt="Alt Text" width="320"></p>
+
+<p>With only a couple of lines of code.</p>
+
+<p>First, you need a markdown parser which will take a markdown formatted string and turn it into HTML. For this example we are going to be using <a href="https://github.com/mdiep/MMMarkdown">MMMarkdown</a>.</p>
+
+<p><code>MMMarkdown</code> makes it extremely simple to turn some markdown into HTML. If we had the markdown above in a file called <code>Example.md</code> in our project, you can turn it into HTML like so:</p>
+
+<p>```objc
+NSString *markdown = [NSString stringWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@&ldquo;Example&rdquo; ofType:@&ldquo;md&rdquo;]  encoding:NSUTF8StringEncoding error:nil];</p>
+
+<p>NSString *html = [MMMarkdown HTMLStringWithMarkdown:markdown error:nil];
+```</p>
+
+<p>Then, once you have the HTML, just create the <code>NSAttributedString</code> like so:</p>
+
+<p>```objc
+NSDictionary *options = @{NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType};</p>
+
+<p>NSAttributedString *preview = [[NSAttributedString alloc] initWithData:[_html dataUsingEncoding:NSUTF8StringEncoding] options:options documentAttributes:nil error:&amp;error];
+```</p>
+
+<p>Now all you have to do is set the <code>attributedText</code> property on a TextKit backed view (e.g. <code>UITextView</code>), like this:</p>
+
+<p><code>objc
+UITextView *liveView = [[UITextView alloc] init];
+liveView.attributedText = preview;
+</code></p>
+
+<p>This doesn&rsquo;t mean the <code>UITextView</code> can display all the HTML you throw at it. Stylesheets have no effect (although certain CSS styles do seem to work, but it&rsquo;s not documented anywhere what is supported and what is not). If you do want to display a full web page, you could of course always use <code>UIWebView</code> instead.</p>
+
+<p>I&rsquo;ve uploaded an example project that demonstrating how to put this all together called <a href="https://github.com/rubymaverick/MarkyMark">MarkyMark</a> (the naming of this repo happened to coincide with a viewing of Pain and Gain).</p>
+]]></content>
+  </entry>
+  
+</feed>
