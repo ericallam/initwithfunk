@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-09-29T10:02:30-04:00</updated>
+  <updated>2013-12-17T23:06:36+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -14,9 +14,31 @@
 
   
   <entry>
+    <title type="html"><![CDATA[Building Better Transitions with iOS 7]]></title>
+    <link href="http://initwithfunk.com/blog/2013/12/17/building-better-transitions-with-ios-7/"/>
+    <updated>2013-12-17T19:16:00+00:00</updated>
+    <id>http://initwithfunk.com/blog/2013/12/17/building-better-transitions-with-ios-7</id>
+    <content type="html"><![CDATA[<p><img src="http://f.cl.ly/items/113S3E2f3r1w111K1d1X/photo.jpg" width=400 /></p>
+
+<p>I gave my first iOS related tech talk yesterday at <a href="http://london.alttechtalks.com">Alt Tech Talks London</a>, which was a blast, especially to share the stage with such <a href="http://london.alttechtalks.com/#speakers">accomplished people</a> in the iOS community.</p>
+
+<p>As I said in my talk, transitions are important, and the flexibilty brought on by the opening up of the transition system in iOS 7 has created some opportunities for developers to make their apps standout and provide a better experience for their users.</p>
+
+<p>Ironically, I built my presentation as a series of videos, animations, and transitions, and so it doesn&rsquo;t really make sense to post the slides as a flat PDF. Instead I&rsquo;ve posted an Xcode project that includes all the code so that you can open it up and fiddle around with it, read the comments, or use it as a basis for transitions in your own apps. Here is the final product of a customized modal transition:</p>
+
+<iframe src="http://initwithfunk.com//player.vimeo.com/video/82126619" width="400" height="706" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
+
+
+<p> <p><a href="http://vimeo.com/82126619">Example Custom Modal Transition in iOS 7</a> from <a href="http://vimeo.com/user4111390">Eric Allam</a> on <a href="https://vimeo.com">Vimeo</a>.</p></p>
+
+<p>Check it out <a href="https://github.com/rubymaverick/PhotoTransitionsExample">on Github</a> or <a href="https://github.com/rubymaverick/PhotoTransitionsExample/archive/master.zip">Download the ZIP</a>.</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Easy Markdown rendering with NSAttributedString on iOS 7]]></title>
     <link href="http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7/"/>
-    <updated>2013-09-29T09:55:00-04:00</updated>
+    <updated>2013-09-29T09:55:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7</id>
     <content type="html"><![CDATA[<p>A little known addition to iOS 7 makes rendering markdown to a <code>UITextView</code> really simple. The <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/NSAttributedString_UIKit_Additions/Reference/Reference.html#//apple_ref/doc/uid/TP40011688">UIKit Additions</a> to <a href="https://developer.apple.com/library/ios/documentation/cocoa/reference/foundation/Classes/NSAttributedString_Class/Reference/Reference.html">NSAttributedString</a> now includes a document type option called <code>NSHTMLTextDocumentType</code> that does exactly what you&rsquo;d expect: it allows you to easily render HTML in a <code>UITextView</code>, <code>UILabel</code>, or <code>UITextField</code>. So if we combine the new document type with a markdown parser, we can go from this:</p>
 
@@ -104,7 +126,7 @@
   <entry>
     <title type="html"><![CDATA[Breaking Bad with DTrace]]></title>
     <link href="http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace/"/>
-    <updated>2013-05-31T21:25:00-04:00</updated>
+    <updated>2013-05-31T21:25:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace</id>
     <content type="html"><![CDATA[<p><em>If you have any feedback on this article, please contact me on <a href="http://twitter.com/eallam">twitter</a></em></p>
 
@@ -431,7 +453,7 @@
   <entry>
     <title type="html"><![CDATA[The Case of the WWDC Sellout]]></title>
     <link href="http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout/"/>
-    <updated>2013-05-26T17:32:00-04:00</updated>
+    <updated>2013-05-26T17:32:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/26/the-case-of-the-wwdc-sellout</id>
     <content type="html"><![CDATA[<p><img src="http://i.imgur.com/A0WoI4T.jpg" /></p>
 
@@ -483,7 +505,7 @@
   <entry>
     <title type="html"><![CDATA[Announcing Try Objective-C]]></title>
     <link href="http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code/"/>
-    <updated>2013-05-09T13:36:00-04:00</updated>
+    <updated>2013-05-09T13:36:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code</id>
     <content type="html"><![CDATA[<p><img src="https://d1ffx7ull4987f.cloudfront.net/images/achievements/large_badge/246/completed-try-objective-c-d2ebeb17d5acfd77df0bf3ae3d2b89f7.png" alt="Badge" /></p>
 
@@ -506,7 +528,7 @@
   <entry>
     <title type="html"><![CDATA[Setting up KIF Integration Tests for iOS]]></title>
     <link href="http://initwithfunk.com/blog/2012/10/21/setting-up-kif-integration-tests-for-ios/"/>
-    <updated>2012-10-21T12:03:00-04:00</updated>
+    <updated>2012-10-21T12:03:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2012/10/21/setting-up-kif-integration-tests-for-ios</id>
     <content type="html"><![CDATA[<p>Square released a pretty neat Integration Testing library called <a href="https://github.com/square/KIF">KIF</a> last year and we have been using it to test the challenges for our upcoming <a href="http://kickstarter.codeschool.com">Try iOS</a> course on <a href="http://www.codeschool.com/courses">Code School</a>.  The instructions in the KIF <a href="https://github.com/square/KIF/blob/master/README.md">README</a> on setting up an Xcode 4 project are missing a couple of crucial steps, and after much Googling and Stackoverflowing I finally figured out how to get it to work, so I figured I&rsquo;d share the process we are using for setting up KIF projects.</p>
 

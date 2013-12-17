@@ -4,7 +4,7 @@
   <title><![CDATA[Category: TextKit | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/textkit/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-09-29T10:02:30-04:00</updated>
+  <updated>2013-12-17T23:06:36+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -16,7 +16,7 @@
   <entry>
     <title type="html"><![CDATA[Easy Markdown rendering with NSAttributedString on iOS 7]]></title>
     <link href="http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7/"/>
-    <updated>2013-09-29T09:55:00-04:00</updated>
+    <updated>2013-09-29T09:55:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7</id>
     <content type="html"><![CDATA[<p>A little known addition to iOS 7 makes rendering markdown to a <code>UITextView</code> really simple. The <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/NSAttributedString_UIKit_Additions/Reference/Reference.html#//apple_ref/doc/uid/TP40011688">UIKit Additions</a> to <a href="https://developer.apple.com/library/ios/documentation/cocoa/reference/foundation/Classes/NSAttributedString_Class/Reference/Reference.html">NSAttributedString</a> now includes a document type option called <code>NSHTMLTextDocumentType</code> that does exactly what you&rsquo;d expect: it allows you to easily render HTML in a <code>UITextView</code>, <code>UILabel</code>, or <code>UITextField</code>. So if we combine the new document type with a markdown parser, we can go from this:</p>
 

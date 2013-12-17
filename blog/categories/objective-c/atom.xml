@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Objective-C | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/objective-c/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2013-09-29T10:02:30-04:00</updated>
+  <updated>2013-12-17T23:06:36+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -14,9 +14,31 @@
 
   
   <entry>
+    <title type="html"><![CDATA[Building Better Transitions with iOS 7]]></title>
+    <link href="http://initwithfunk.com/blog/2013/12/17/building-better-transitions-with-ios-7/"/>
+    <updated>2013-12-17T19:16:00+00:00</updated>
+    <id>http://initwithfunk.com/blog/2013/12/17/building-better-transitions-with-ios-7</id>
+    <content type="html"><![CDATA[<p><img src="http://f.cl.ly/items/113S3E2f3r1w111K1d1X/photo.jpg" width=400 /></p>
+
+<p>I gave my first iOS related tech talk yesterday at <a href="http://london.alttechtalks.com">Alt Tech Talks London</a>, which was a blast, especially to share the stage with such <a href="http://london.alttechtalks.com/#speakers">accomplished people</a> in the iOS community.</p>
+
+<p>As I said in my talk, transitions are important, and the flexibilty brought on by the opening up of the transition system in iOS 7 has created some opportunities for developers to make their apps standout and provide a better experience for their users.</p>
+
+<p>Ironically, I built my presentation as a series of videos, animations, and transitions, and so it doesn&rsquo;t really make sense to post the slides as a flat PDF. Instead I&rsquo;ve posted an Xcode project that includes all the code so that you can open it up and fiddle around with it, read the comments, or use it as a basis for transitions in your own apps. Here is the final product of a customized modal transition:</p>
+
+<iframe src="http://initwithfunk.com//player.vimeo.com/video/82126619" width="400" height="706" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
+
+
+<p> <p><a href="http://vimeo.com/82126619">Example Custom Modal Transition in iOS 7</a> from <a href="http://vimeo.com/user4111390">Eric Allam</a> on <a href="https://vimeo.com">Vimeo</a>.</p></p>
+
+<p>Check it out <a href="https://github.com/rubymaverick/PhotoTransitionsExample">on Github</a> or <a href="https://github.com/rubymaverick/PhotoTransitionsExample/archive/master.zip">Download the ZIP</a>.</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Announcing Try Objective-C]]></title>
     <link href="http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code/"/>
-    <updated>2013-05-09T13:36:00-04:00</updated>
+    <updated>2013-05-09T13:36:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2013/05/09/try-objective-c-and-learning-to-code</id>
     <content type="html"><![CDATA[<p><img src="https://d1ffx7ull4987f.cloudfront.net/images/achievements/large_badge/246/completed-try-objective-c-d2ebeb17d5acfd77df0bf3ae3d2b89f7.png" alt="Badge" /></p>
 
