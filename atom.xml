@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-07T17:47:00+00:00</updated>
+  <updated>2014-02-07T17:48:06+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -22,7 +22,7 @@
 
 <p>Among the <a href="http://blog.brianlovin.com/design-details-paper-by-facebook">many</a> great little design details in the new <a href="https://www.facebook.com/paper">Paper by Facebook</a> app released last week, this status-bar-hover thing caught me by surprise.  My first reaction was &ldquo;Hey, they can&rsquo;t do that!&rdquo;, but of course (and to quote my <a href="http://www.youtube.com/watch?v=3A0q36NOgdQ">favorite line</a> from Independence Day) well they just eh&hellip; did.</p>
 
-<p>After a little digging around, I&rsquo;ve figured out how to do it and it involves using multiple <strong>UIWindow</strong> instances.I&rsquo;ve always thought that iOS applications could only ever use one <code>UIWindow</code>, but that turns out to be not the case. It&rsquo;s perfectly alright to have more than the <code>[UIApplication sharedApplication].keyWindow</code> which you usually create in the AppDelegate (or Storyboard creates it for you).</p>
+<p>After a little digging around, I&rsquo;ve figured out how to do it and it involves using multiple <strong>UIWindow</strong> instances. I&rsquo;ve always thought that iOS applications could only ever use one <code>UIWindow</code>, but that turns out to be not the case. It&rsquo;s perfectly alright to have more than the <code>[UIApplication sharedApplication].keyWindow</code> which you usually create in the AppDelegate (or Storyboard creates it for you).</p>
 
 <p>A <code>UIWindow</code> is just a subclass of <code>UIView</code>, but it&rsquo;s also a special type of view that&rsquo;s specifically for providing an area for displaying views and for distributing events to those views. A <code>UIWindow</code> instance has a property called <code>windowLevel</code> that allows you to specify where on the z-index the window appears relative to other windows in the app. Most of the time you only have your main window with a <code>windowLevel</code> set to <code>UIWindowLevelNormal</code>, and then occasionally a <code>UIAlertView</code> window is displayed with a <code>windowLevel</code> of <code>UIWindowLevelAlert</code>.</p>
 
