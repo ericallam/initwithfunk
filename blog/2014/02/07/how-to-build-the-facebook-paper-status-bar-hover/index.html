@@ -1,0 +1,166 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta name="google-site-verification" content="f1OtvP7JCHm6M9Ca7vMcFg3q-1NEOvDMcSKfKlVW_pA" />
+	<script data-cfasync="false" type="text/javascript" src="//use.typekit.net/axj3cfp.js"></script>
+	<script data-cfasync="false" type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>initWithFunk: by Eric Allam</title>
+
+<meta name="author" content="Eric Allam"> 
+
+<meta name="description" content="Among the many great little design details in the new Paper by Facebook app released last week, this status-bar-hover thing caught me by surprise. &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="initWithFunk:" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdn.sublimevideo.net/js/7rwly8ga.js"></script>
+
+	<style>
+		#header h1 {
+			font-size: 60px;
+		}
+
+		#header h4 {
+			margin-top: 22px;
+		}
+	</style>
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/">initWithFunk:</a></h1>
+<h4>Disclaimer: opinions expressed below do not belong to <a href="http://twitter.com/eallam">Eric Allam</a></h4>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/portfolio">Portfolio</a></li>
+	<li><a href="/archives">Archive</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:initwithfunk.com">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">How to Build the Facebook Paper Status Bar Hover</h2>
+	<div class="entry-content"><p><img src="http://i.imgur.com/SHpj1Ll.gif" alt="paper" /></p>
+
+<p>Among the <a href="http://blog.brianlovin.com/design-details-paper-by-facebook">many</a> great little design details in the new <a href="https://www.facebook.com/paper">Paper by Facebook</a> app released last week, this status-bar-hover thing caught me by surprise.  My first reaction was &ldquo;Hey, they can&rsquo;t do that!&rdquo;, but of course (and to quote my <a href="http://www.youtube.com/watch?v=3A0q36NOgdQ">favorite line</a> from Independence Day) well they just eh&hellip; did.</p>
+
+<p>After a little digging around, I&rsquo;ve figured out how to do it and it involves using multiple <strong>UIWindow</strong> instances.I&rsquo;ve always thought that iOS applications could only ever use one <code>UIWindow</code>, but that turns out to be not the case. It&rsquo;s perfectly alright to have more than the <code>[UIApplication sharedApplication].keyWindow</code> which you usually create in the AppDelegate (or Storyboard creates it for you).</p>
+
+<p>A <code>UIWindow</code> is just a subclass of <code>UIView</code>, but it&rsquo;s also a special type of view that&rsquo;s specifically for providing an area for displaying views and for distributing events to those views. A <code>UIWindow</code> instance has a property called <code>windowLevel</code> that allows you to specify where on the z-index the window appears relative to other windows in the app. Most of the time you only have your main window with a <code>windowLevel</code> set to <code>UIWindowLevelNormal</code>, and then occasionally a <code>UIAlertView</code> window is displayed with a <code>windowLevel</code> of <code>UIWindowLevelAlert</code>.</p>
+
+<p>So to create a new <code>UIWindow</code> and have it&rsquo;s contents appear above the status bar, all you have to do is this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UIWindow</span> <span class="o">*</span><span class="n">foregroundWindow</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIWindow</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithFrame:</span><span class="p">[[</span><span class="n">UIScreen</span> <span class="n">mainScreen</span><span class="p">]</span> <span class="n">bounds</span><span class="p">]];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">backgroundColor</span> <span class="o">=</span> <span class="p">[</span><span class="n">UIColor</span> <span class="n">clearColor</span><span class="p">];</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">rootViewController</span> <span class="o">=</span> <span class="p">[</span><span class="n">ForegroundViewController</span> <span class="n">new</span><span class="p">];</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">windowLevel</span> <span class="o">=</span> <span class="n">UIWindowLevelStatusBar</span><span class="p">;</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">hidden</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That will display the contents of <code>ForegroundViewController</code> on top of the status bar. I&rsquo;ve put together a demo app with the above technique (combined with a sprinkle of a pan gesture and dynamics) that looks like this:</p>
+
+<p><img src="http://i.imgur.com/D0Tly5s.gif" alt="demo" width=300 /></p>
+
+<p>Download the project <a href="https://github.com/rubymaverick/Paper-StatusBarHover-Demo">over at github</a>.</p>
+
+<h4>Gotchas</h4>
+
+<p>The demo I built is probably not the end of the story. Check out <a href="http://shaune.com.au/using-multiple-uiwindows-in-ios-applications/">Shaun Ervine&rsquo;s post</a> on using multiple <code>UIWindow</code> instances for some possible issues / gotchas in using this technique.</p>
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-02-07T16:43:00+00:00" pubdate data-updated="true">Feb 7<span>th</span>, 2014</time></div>
+	<div class="tags">
+
+</div>
+	
+</div></article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2014
+
+    Eric Allam
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/javascripts/slash.js"></script>
+
+
+
+
+
+
+<script type="text/javascript">
+  var _gauges = _gauges || [];
+  (function() {
+    var t   = document.createElement('script');
+    t.type  = 'text/javascript';
+    t.async = true;
+    t.id    = 'gauges-tracker';
+    t.setAttribute('data-site-id', '51a38dc8613f5d7c63000012');
+    t.src = '//secure.gaug.es/track.js';
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(t, s);
+  })();
+</script>
+</body>
+</html>
