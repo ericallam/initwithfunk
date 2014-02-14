@@ -1,0 +1,185 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta name="google-site-verification" content="f1OtvP7JCHm6M9Ca7vMcFg3q-1NEOvDMcSKfKlVW_pA" />
+	<script type="text/javascript" src="//use.typekit.net/fbh4wul.js"></script>
+	<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>initWithFunk: by Eric Allam</title>
+
+<meta name="author" content="Eric Allam"> 
+
+<meta name="description" content="If you are building an app that includes mapping directions, you may be worried about hitting the Google Maps API limit of 2,500 direction requests &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="initWithFunk:" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdn.sublimevideo.net/js/7rwly8ga.js"></script>
+
+	<style>
+		#header h1 {
+			font-size: 60px;
+		}
+
+		#header h4 {
+			margin-top: 22px;
+		}
+	</style>
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/" class="tk-anonymous-pro">initWithFunk:</a></h1>
+<h4>Disclaimer: opinions expressed below do not belong to <a href="http://twitter.com/eallam">Eric Allam</a></h4>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/portfolio">Portfolio</a></li>
+	<li><a href="/archives">Archive</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:initwithfunk.com">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">Google Maps API Isn't the Only Directions Game in Town</h2>
+	<div class="entry-content"><p>If you are building an app that includes mapping directions, you may be worried about hitting the Google Maps API <a href="https://developers.google.com/maps/documentation/directions/">limit</a> of 2,500 direction requests within a 24 hour period before having to <a href="https://developers.google.com/maps/documentation/business">pay up</a> for a higher quota.</p>
+
+<p>With iOS 7, Apple has now added a <a href="http://nshipster.com/mktileoverlay-mkmapsnapshotter-mkdirections/">directions API</a> that is free, and only has per-device throttling. That means that if your app goes full on <a href="http://www.youtube.com/watch?v=JlSQAZEp3PA&amp;desktop_uri=%2Fwatch%3Fv%3DJlSQAZEp3PA">Flappy Bird</a>, you won&rsquo;t need to worry about having to pay up<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>Like the Maps app itself, <code>MKDirections</code> currently only supports walking and driving directions (although keep an eye out for the <code>MKDirectionsTransportType</code> enum in future API diffs).</p>
+
+<p>It&rsquo;s a fairly simple API to use. First, you create a <code>MKDirectionsRequest</code> object:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>MKDirectionsRequest *request = [MKDirectionsRequest new];
+</span><span class='line'>request.transportType = MKDirectionsTransportTypeWalking;
+</span><span class='line'>request.source = [MKMapItem mapItemForCurrentLocation]; // start from the users current location
+</span><span class='line'>request.destination = [MKMapItem initWithPlacemark:selectedPlacemark];
+</span><span class='line'>request.departureDate = [NSDate date]; // Departing now</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then create a <code>MKDirections</code> instance (storing in a property if we need to cancel it later):</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>self.directions = [[MKDirections alloc] initWithRequest:request];</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You can either request all the routing information between those two points<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>, or you can request just the estimated time of arrival<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[self.directions calculateETAWithCompletionHandler:^(MKETAResponse *response, NSError *error) {
+</span><span class='line'>    self.walkingTime.text = [formatter stringForTimeInterval:response.expectedTravelTime];
+</span><span class='line'>}];</span></code></pre></td></tr></table></div></figure>
+
+
+<p>There is nothing in the documentation or App Store Guidelines to suggest that you can&rsquo;t use these directions with a different mapping technology (like Google Maps or <a href="https://www.mapbox.com">MapBox</a>).</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>Well, other than the 30% cut Apple takes <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Using the <code>calculateDirectionsWithCompletionHandler:</code> method <a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Uses the <a href="https://github.com/mattt/FormatterKit/blob/master/FormatterKit/TTTTimeIntervalFormatter.m">TTTTimeIntervalFormatter</a> for creating a human readable string <a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-02-14T11:13:00+00:00" pubdate data-updated="true">Feb 14<span>th</span>, 2014</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/apple-maps/'>Apple Maps</a>, <a class='category' href='/blog/categories/gis/'>GIS</a>, <a class='category' href='/blog/categories/google-maps/'>Google Maps</a>, <a class='category' href='/blog/categories/mapkit/'>MapKit</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>, <a class='category' href='/blog/categories/ios-7/'>iOS 7</a>
+
+
+</div>
+	
+</div></article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2014
+
+    Eric Allam
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/javascripts/slash.js"></script>
+
+
+
+
+
+
+<script type="text/javascript">
+  var _gauges = _gauges || [];
+  (function() {
+    var t   = document.createElement('script');
+    t.type  = 'text/javascript';
+    t.async = true;
+    t.id    = 'gauges-tracker';
+    t.setAttribute('data-site-id', '51a38dc8613f5d7c63000012');
+    t.src = '//secure.gaug.es/track.js';
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(t, s);
+  })();
+</script>
+</body>
+</html>

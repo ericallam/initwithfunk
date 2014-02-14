@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Apple Maps | initWithFunk:]]></title>
+  <link href="http://initwithfunk.com/blog/categories/apple-maps/atom.xml" rel="self"/>
+  <link href="http://initwithfunk.com/"/>
+  <updated>2014-02-14T12:20:18+00:00</updated>
+  <id>http://initwithfunk.com/</id>
+  <author>
+    <name><![CDATA[Eric Allam]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Google Maps API isn't the only directions game in town]]></title>
+    <link href="http://initwithfunk.com/blog/2014/02/14/you-dont-need-to-pay-google-to-get-directions-and-geocoding/"/>
+    <updated>2014-02-14T11:13:00+00:00</updated>
+    <id>http://initwithfunk.com/blog/2014/02/14/you-dont-need-to-pay-google-to-get-directions-and-geocoding</id>
+    <content type="html"><![CDATA[<p>If you are building an app that includes mapping directions, you may be worried about hitting the Google Maps API <a href="https://developers.google.com/maps/documentation/directions/">limit</a> of 2,500 direction requests within a 24 hour period before having to <a href="https://developers.google.com/maps/documentation/business">pay up</a> for a higher quota.</p>
+
+<p>With iOS 7, Apple has now added a <a href="http://nshipster.com/mktileoverlay-mkmapsnapshotter-mkdirections/">directions API</a> that is free, and only has per-device throttling. That means that if your app goes full on <a href="http://www.youtube.com/watch?v=JlSQAZEp3PA&amp;desktop_uri=%2Fwatch%3Fv%3DJlSQAZEp3PA">Flappy Bird</a>, you won&rsquo;t need to worry about having to pay up<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>Like the Maps app itself, <code>MKDirections</code> currently only supports walking and driving directions (although keep an eye out for the <code>MKDirectionsTransportType</code> enum in future API diffs).</p>
+
+<p>It&rsquo;s a fairly simple API to use. First, you create a <code>MKDirectionsRequest</code> object:</p>
+
+<p><code>
+MKDirectionsRequest *request = [MKDirectionsRequest new];
+request.transportType = MKDirectionsTransportTypeWalking;
+request.source = [MKMapItem mapItemForCurrentLocation]; // start from the users current location
+request.destination = [MKMapItem initWithPlacemark:selectedPlacemark];
+request.departureDate = [NSDate date]; // Departing now
+</code></p>
+
+<p>Then create a <code>MKDirections</code> instance (storing in a property if we need to cancel it later):</p>
+
+<p><code>
+self.directions = [[MKDirections alloc] initWithRequest:request];
+</code></p>
+
+<p>You can either request all the routing information between those two points<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>, or you can request just the estimated time of arrival<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>.</p>
+
+<p>```
+[self.directions calculateETAWithCompletionHandler:^(MKETAResponse <em>response, NSError </em>error) {</p>
+
+<pre><code>self.walkingTime.text = [formatter stringForTimeInterval:response.expectedTravelTime];
+</code></pre>
+
+<p>}];
+```</p>
+
+<p>There is nothing in the documentation or App Store Guidelines to suggest that you can&rsquo;t use these directions with a different mapping technology (like Google Maps or <a href="https://www.mapbox.com">MapBox</a>).</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>Well, other than the 30% cut Apple takes <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Using the <code>calculateDirectionsWithCompletionHandler:</code> method <a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Uses the <a href="https://github.com/mattt/FormatterKit/blob/master/FormatterKit/TTTTimeIntervalFormatter.m">TTTTimeIntervalFormatter</a> for creating a human readable string <a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
+  
+</feed>
