@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-14T12:20:18+00:00</updated>
+  <updated>2014-02-17T18:29:08+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -26,32 +26,35 @@
 
 <p>It&rsquo;s a fairly simple API to use. First, you create a <code>MKDirectionsRequest</code> object:</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>MKDirectionsRequest *request = [MKDirectionsRequest new];
-</span><span class='line'>request.transportType = MKDirectionsTransportTypeWalking;
-</span><span class='line'>request.source = [MKMapItem mapItemForCurrentLocation]; // start from the users current location
-</span><span class='line'>request.destination = [MKMapItem initWithPlacemark:selectedPlacemark];
-</span><span class='line'>request.departureDate = [NSDate date]; // Departing now</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">MKDirectionsRequest</span> <span class="o">*</span><span class="n">request</span> <span class="o">=</span> <span class="p">[</span><span class="n">MKDirectionsRequest</span> <span class="n">new</span><span class="p">];</span>
+</span><span class='line'><span class="n">request</span><span class="p">.</span><span class="n">transportType</span> <span class="o">=</span> <span class="n">MKDirectionsTransportTypeWalking</span><span class="p">;</span>
+</span><span class='line'><span class="n">request</span><span class="p">.</span><span class="n">source</span> <span class="o">=</span> <span class="p">[</span><span class="n">MKMapItem</span> <span class="n">mapItemForCurrentLocation</span><span class="p">];</span> <span class="c1">// start from the users current location</span>
+</span><span class='line'><span class="n">request</span><span class="p">.</span><span class="n">destination</span> <span class="o">=</span> <span class="p">[</span><span class="n">MKMapItem</span> <span class="nl">initWithPlacemark:</span><span class="n">selectedPlacemark</span><span class="p">];</span>
+</span><span class='line'><span class="n">request</span><span class="p">.</span><span class="n">departureDate</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSDate</span> <span class="n">date</span><span class="p">];</span> <span class="c1">// Departing now</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
 <p>Then create a <code>MKDirections</code> instance (storing in a property if we need to cancel it later):</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>self.directions = [[MKDirections alloc] initWithRequest:request];</span></code></pre></td></tr></table></div></figure>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">directions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">MKDirections</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithRequest:</span><span class="n">request</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
 <p>You can either request all the routing information between those two points<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>, or you can request just the estimated time of arrival<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>.</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>[self.directions calculateETAWithCompletionHandler:^(MKETAResponse *response, NSError *error) {
-</span><span class='line'>    self.walkingTime.text = [formatter stringForTimeInterval:response.expectedTravelTime];
-</span><span class='line'>}];</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">directions</span> <span class="nl">calculateETAWithCompletionHandler:</span><span class="o">^</span><span class="p">(</span><span class="n">MKETAResponse</span> <span class="o">*</span><span class="n">response</span><span class="p">,</span> <span class="n">NSError</span> <span class="o">*</span><span class="n">error</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">walkingTime</span><span class="p">.</span><span class="n">text</span> <span class="o">=</span> <span class="p">[</span><span class="n">formatter</span> <span class="nl">stringForTimeInterval:</span><span class="n">response</span><span class="p">.</span><span class="n">expectedTravelTime</span><span class="p">];</span>
+</span><span class='line'><span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
 <p>There is nothing in the documentation or App Store Guidelines to suggest that you can&rsquo;t use these directions with a different mapping technology (like Google Maps or <a href="https://www.mapbox.com">MapBox</a>).</p>

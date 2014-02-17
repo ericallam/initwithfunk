@@ -4,7 +4,7 @@
   <title><![CDATA[Category: MapKit | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/mapkit/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-14T12:20:18+00:00</updated>
+  <updated>2014-02-17T18:29:08+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -26,7 +26,7 @@
 
 <p>It&rsquo;s a fairly simple API to use. First, you create a <code>MKDirectionsRequest</code> object:</p>
 
-<p><code>
+<p><code>objc
 MKDirectionsRequest *request = [MKDirectionsRequest new];
 request.transportType = MKDirectionsTransportTypeWalking;
 request.source = [MKMapItem mapItemForCurrentLocation]; // start from the users current location
@@ -36,13 +36,13 @@ request.departureDate = [NSDate date]; // Departing now
 
 <p>Then create a <code>MKDirections</code> instance (storing in a property if we need to cancel it later):</p>
 
-<p><code>
+<p><code>objc
 self.directions = [[MKDirections alloc] initWithRequest:request];
 </code></p>
 
 <p>You can either request all the routing information between those two points<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>, or you can request just the estimated time of arrival<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>.</p>
 
-<p>```
+<p>```objc
 [self.directions calculateETAWithCompletionHandler:^(MKETAResponse <em>response, NSError </em>error) {</p>
 
 <pre><code>self.walkingTime.text = [formatter stringForTimeInterval:response.expectedTravelTime];
