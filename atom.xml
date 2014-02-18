@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-17T18:37:59+00:00</updated>
+  <updated>2014-02-18T10:51:31+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,277 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Do the Swizzle]]></title>
+    <link href="http://initwithfunk.com/blog/2014/02/18/do-the-swizzle/"/>
+    <updated>2014-02-18T08:00:00+00:00</updated>
+    <id>http://initwithfunk.com/blog/2014/02/18/do-the-swizzle</id>
+    <content type="html"><![CDATA[<p><a href="http://nshipster.com/method-swizzling/">Method swizzling</a> has recently hit the mainstream. It&rsquo;s a technique we use at <a href="http://www.codeschool.com/paths/ios">Code School</a> quite a bit. For example, if you look inside the downloaded projects for <a href="http://ios7.codeschool.com/levels/1">Core iOS 7</a>, you&rsquo;ll see plenty of swizzling going on and most of the time the technique described in mattt&rsquo;s <a href="http://nshipster.com/method-swizzling/">post</a> is sufficient. But every once in awhile you&rsquo;ll try to sizzle a method and for some strange reason it doesn&rsquo;t work. It&rsquo;s like the class is immune to your swizzling ways.</p>
+
+<p>I ran into one of these immune classes when trying to swizzle the <code>downloadTaskWithURL:</code> method on <code>NSURLSession</code> using the traditional category-based technique. I wanted to make sure the <a href="http://www.codeschool.com/paths/ios">Code School</a> student called <code>downloadTaskWithURL:</code> with the correct parameters.</p>
+
+<p>Here what the calling-code looked like:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">application:</span><span class="p">(</span><span class="n">UIApplication</span> <span class="o">*</span><span class="p">)</span><span class="nv">application</span> <span class="nf">didFinishLaunchingWithOptions:</span><span class="p">(</span><span class="n">NSDictionary</span> <span class="o">*</span><span class="p">)</span><span class="nv">launchOptions</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSURLSessionConfiguration</span> <span class="o">*</span><span class="k">default</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSURLSessionConfiguration</span> <span class="n">defaultSessionConfiguration</span><span class="p">];</span>
+</span><span class='line'>    <span class="n">NSURLSession</span> <span class="o">*</span><span class="n">session</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSURLSession</span> <span class="nl">sessionWithConfiguration:</span><span class="k">default</span>
+</span><span class='line'>                                                          <span class="nl">delegate:</span><span class="n">self</span>
+</span><span class='line'>                                                     <span class="nl">delegateQueue:</span><span class="p">[</span><span class="n">NSOperationQueue</span> <span class="n">mainQueue</span><span class="p">]];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSURL</span> <span class="o">*</span><span class="n">URL</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSURL</span> <span class="nl">URLWithString:</span><span class="s">@&quot;http://initwithfunk.com&quot;</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSURLSessionDownloadTask</span> <span class="o">*</span><span class="n">task</span> <span class="o">=</span> <span class="p">[</span><span class="n">session</span> <span class="nl">downloadTaskWithURL:</span><span class="n">URL</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">task</span> <span class="n">resume</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">URLSession:</span><span class="p">(</span><span class="n">NSURLSession</span> <span class="o">*</span><span class="p">)</span><span class="nv">session</span> <span class="nf">task:</span><span class="p">(</span><span class="n">NSURLSessionTask</span> <span class="o">*</span><span class="p">)</span><span class="nv">task</span> <span class="nf">didCompleteWithError:</span><span class="p">(</span><span class="n">NSError</span> <span class="o">*</span><span class="p">)</span><span class="nv">error</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSHTTPURLResponse</span> <span class="o">*</span><span class="n">response</span> <span class="o">=</span> <span class="p">(</span><span class="n">NSHTTPURLResponse</span> <span class="o">*</span><span class="p">)</span><span class="n">task</span><span class="p">.</span><span class="n">response</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSLog</span><span class="p">(</span><span class="s">@&quot;Task did complete with status: %d&quot;</span><span class="p">,</span> <span class="n">response</span><span class="p">.</span><span class="n">statusCode</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And the swizzling category (this isn&rsquo;t exactly how it worked but essentially it did the same thing):</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="cp">#import &quot;NSURLSession+Swizzle.h&quot;</span>
+</span><span class='line'><span class="cp">#import &lt;objc/runtime.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@implementation</span> <span class="nc">NSURLSession</span> <span class="nl">(Swizzle)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">+</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">load</span><span class="p">{</span>
+</span><span class='line'>    <span class="k">static</span> <span class="n">dispatch_once_t</span> <span class="n">onceToken</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">dispatch_once</span><span class="p">(</span><span class="o">&amp;</span><span class="n">onceToken</span><span class="p">,</span> <span class="o">^</span><span class="p">{</span>
+</span><span class='line'>        <span class="n">Class</span> <span class="n">class</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">class</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="kt">SEL</span> <span class="n">originalSelector</span> <span class="o">=</span> <span class="k">@selector</span><span class="p">(</span><span class="nl">downloadTaskWithURL:</span><span class="p">);</span>
+</span><span class='line'>        <span class="kt">SEL</span> <span class="n">swizzledSelector</span> <span class="o">=</span> <span class="k">@selector</span><span class="p">(</span><span class="nl">xxx_downloadTaskWithURL:</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">Method</span> <span class="n">originalMethod</span> <span class="o">=</span> <span class="n">class_getInstanceMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span> <span class="n">originalSelector</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">Method</span> <span class="n">swizzledMethod</span> <span class="o">=</span> <span class="n">class_getInstanceMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span> <span class="n">swizzledSelector</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">IMP</span> <span class="n">swizzledImp</span> <span class="o">=</span> <span class="n">method_getImplementation</span><span class="p">(</span><span class="n">swizzledMethod</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">IMP</span> <span class="n">originalImp</span> <span class="o">=</span> <span class="n">method_getImplementation</span><span class="p">(</span><span class="n">originalMethod</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="kt">BOOL</span> <span class="n">didAddMethod</span> <span class="o">=</span>
+</span><span class='line'>        <span class="n">class_addMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span>
+</span><span class='line'>                        <span class="n">originalSelector</span><span class="p">,</span>
+</span><span class='line'>                        <span class="n">swizzledImp</span><span class="p">,</span>
+</span><span class='line'>                        <span class="n">method_getTypeEncoding</span><span class="p">(</span><span class="n">swizzledMethod</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">didAddMethod</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">class_replaceMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span>
+</span><span class='line'>                                <span class="n">swizzledSelector</span><span class="p">,</span>
+</span><span class='line'>                                <span class="n">originalImp</span><span class="p">,</span>
+</span><span class='line'>                                <span class="n">method_getTypeEncoding</span><span class="p">(</span><span class="n">originalMethod</span><span class="p">));</span>
+</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">method_exchangeImplementations</span><span class="p">(</span><span class="n">originalMethod</span><span class="p">,</span> <span class="n">swizzledMethod</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="n">NSURLSessionDownloadTask</span> <span class="o">*</span><span class="p">)</span><span class="nf">xxx_downloadTaskWithURL:</span><span class="p">(</span><span class="n">NSURL</span> <span class="o">*</span><span class="p">)</span><span class="nv">url</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSLog</span><span class="p">(</span><span class="s">@&quot;%s&quot;</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">[</span><span class="n">self</span> <span class="nl">xxx_downloadTaskWithURL:</span><span class="n">url</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When this ran, the <code>xxx_</code> method would never get called. I stepped through the <code>+load</code> and everything seemed to be working just fine. But when I logged the pointers of the <code>class</code> I was swizzling in <code>+load</code> and the <code>class</code> of the <code>NSURLSession</code> instance I was using in the app delegate, I discovered that they were pointing to different locations in memory.</p>
+
+<p>So I tried updating the <code>+load</code> method. Instead of using <code>self.class</code>, I would grab the class from an actual instance of <code>NSURLSession</code>, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">Class</span> <span class="n">class</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSURLSession</span> <span class="n">sharedSession</span><span class="p">].</span><span class="n">class</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Unfortunately, that led to the <code>class_getInstanceMethod(class, swizzledSelector)</code> call returning nil since it was no longer looking in the class that included the <code>xxx_downloadTaskWithURL:</code> method. Replacing that code with <code>class_getInstanceMethod(self.class, swizzledSelector)</code> won&rsquo;t work either, leading to a <code>-[__NSCFURLSession xxx_downloadTaskWithURL:]: unrecognized selector</code> error when the implementation of the swizzle method tries to call back to the original method that doesn&rsquo;t exist.</p>
+
+<h3>Category-less Swizzle</h3>
+
+<p>It turns out there is a more direct way to swizzle methods without first defining the replacement method on the same class as the original method. <a href="https://twitter.com/mikeash">Mike Ash</a> details this technique in a fantastic swizzling <a href="https://www.mikeash.com/pyblog/friday-qa-2010-01-29-method-replacement-for-fun-and-profit.html">Friday Q&amp;A</a>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="c1">// Create a function pointer for the original downloadTaskWithURL: to be stored in</span>
+</span><span class='line'><span class="k">static</span> <span class="n">NSURLSessionDownloadTask</span> <span class="o">*</span> <span class="p">(</span><span class="o">*</span><span class="n">OriginalDownloadedTaskWithURL</span><span class="p">)(</span><span class="kt">id</span><span class="p">,</span> <span class="kt">SEL</span><span class="p">,</span> <span class="n">NSURL</span> <span class="o">*</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// Define our custom implementation of downloadTaskWithURL:, calling OriginalDownloadedTaskWithURL</span>
+</span><span class='line'><span class="c1">// to call the original method</span>
+</span><span class='line'><span class="k">static</span> <span class="n">NSURLSessionDownloadTask</span> <span class="o">*</span> <span class="err">`</span><span class="p">(</span><span class="kt">id</span> <span class="n">self</span><span class="p">,</span> <span class="kt">SEL</span> <span class="n">_cmd</span><span class="p">,</span> <span class="n">NSURL</span> <span class="o">*</span><span class="n">url</span><span class="p">){</span>
+</span><span class='line'>    <span class="n">NSLog</span><span class="p">(</span><span class="s">@&quot;%s&quot;</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSURLSessionDownloadTask</span> <span class="o">*</span><span class="n">task</span> <span class="o">=</span> <span class="n">OriginalDownloadedTaskWithURL</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">_cmd</span><span class="p">,</span> <span class="n">url</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">task</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">+</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">load</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">static</span> <span class="n">dispatch_once_t</span> <span class="n">onceToken</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">dispatch_once</span><span class="p">(</span><span class="o">&amp;</span><span class="n">onceToken</span><span class="p">,</span> <span class="o">^</span><span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1">// Replace the method on the same class that&#39;s used</span>
+</span><span class='line'>        <span class="c1">// In the calling code</span>
+</span><span class='line'>        <span class="n">Class</span> <span class="n">class</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSURLSession</span> <span class="n">sharedSession</span><span class="p">].</span><span class="n">class</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="kt">SEL</span> <span class="n">originalSelector</span> <span class="o">=</span> <span class="k">@selector</span><span class="p">(</span><span class="nl">downloadTaskWithURL:</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1">// The replacemethod method implementation</span>
+</span><span class='line'>        <span class="n">IMP</span> <span class="n">replacement</span> <span class="o">=</span> <span class="p">(</span><span class="n">IMP</span><span class="p">)</span><span class="n">CustomDownloadTaskWithURL</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1">// This will eventually hold the original downloadTaskWithURL: method</span>
+</span><span class='line'>        <span class="n">IMP</span> <span class="o">*</span><span class="n">store</span> <span class="o">=</span> <span class="p">(</span><span class="n">IMP</span> <span class="o">*</span><span class="p">)</span><span class="o">&amp;</span><span class="n">OriginalDownloadedTaskWithURL</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">IMP</span> <span class="n">originalImp</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">Method</span> <span class="n">method</span> <span class="o">=</span> <span class="n">class_getInstanceMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span> <span class="n">originalSelector</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">method</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">type</span> <span class="o">=</span> <span class="n">method_getTypeEncoding</span><span class="p">(</span><span class="n">method</span><span class="p">);</span>
+</span><span class='line'>            <span class="c1">// Replace the original method with the XXXDownloadTaskWithURL IMP function</span>
+</span><span class='line'>            <span class="n">originalImp</span> <span class="o">=</span> <span class="n">class_replaceMethod</span><span class="p">(</span><span class="n">class</span><span class="p">,</span> <span class="n">originalSelector</span><span class="p">,</span> <span class="n">replacement</span><span class="p">,</span> <span class="n">type</span><span class="p">);</span>
+</span><span class='line'>            <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">originalImp</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="n">originalImp</span> <span class="o">=</span> <span class="n">method_getImplementation</span><span class="p">(</span><span class="n">method</span><span class="p">);</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1">// Put the original method IMP into the store pointer</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">originalImp</span> <span class="o">&amp;&amp;</span> <span class="n">store</span><span class="p">)</span> <span class="p">{</span> <span class="o">*</span><span class="n">store</span> <span class="o">=</span> <span class="n">originalImp</span><span class="p">;</span> <span class="p">}</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Since all objective-c methods eventually just become a C function with the first two arguments of <code>id self</code> and <code>SEL _cmd</code>, we can just go ahead and define the replacement method as a static function called <code>XXXDownloadTaskWithURL</code> that accepts self, _cmd, and an <code>NSURL *</code> as the &ldquo;first&rdquo; argument.</p>
+
+<p>We also create a place to store the original method, a pointer to an IMP pointer called <code>OriginalDownloadedTaskWithURL</code> which will allow our replacement method to call back out to the original.  Of course the <a href="https://www.mikeash.com/pyblog/friday-qa-2010-01-29-method-replacement-for-fun-and-profit.html">original</a> description of this approach is a better so definitely check it out.</p>
+
+<h3>Why doesn&rsquo;t category-based swizzling work for NSURLSession?</h3>
+
+<p>I&rsquo;m not exactly sure what makes <code>NSURLSession</code> immune to the category based swizzle. I think it has something to do with it possibly being a class-cluster, or maybe it has to do with it being a toll-free bridged class to <code>__NSCFURLSession</code>. I&rsquo;m not sure.</p>
+
+<p>If you know the answer, I&rsquo;d love to hear about it. Message me on twitter <a href="http://twitter.com/eallam">@eallam</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Google Maps API isn't the only directions game in town]]></title>
