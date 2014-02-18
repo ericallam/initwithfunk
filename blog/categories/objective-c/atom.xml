@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Objective-C | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/objective-c/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-18T12:09:47+00:00</updated>
+  <updated>2014-02-18T13:23:15+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -190,6 +190,52 @@ return task;
 <p>I&rsquo;m not exactly sure what makes <code>NSURLSession</code> immune to the category based swizzle. I think it has something to do with it possibly being a class-cluster, or maybe it has to do with it being a toll-free bridged class to <code>__NSCFURLSession</code>. I&rsquo;m not sure.</p>
 
 <p>If you know the answer, I&rsquo;d love to hear about it. Message me on twitter <a href="http://twitter.com/eallam">@eallam</a>.</p>
+
+<h3><strong>UPDATE</strong></h3>
+
+<p>Thanks to a tip from <a href="https://twitter.com/Daniel1of1/status/435758911405035520">Daniel Haight</a> it&rsquo;s possible to shorten this code a bit by using <code>imp_implementationWithBlock</code> instead of creating a C function for the replacement method (saving us from having to name it):</p>
+
+<p>```objc
+// Create a function pointer for the original downloadTaskWithURL: to be stored in
+static NSURLSessionDownloadTask * (<em>OriginalDownloadedTaskWithURL)(id, SEL, NSURL </em>);</p>
+
+<ul>
+<li><p>(void)load
+{
+  static dispatch_once_t onceToken;
+  dispatch_once(&amp;onceToken, ^{</p>
+
+<pre><code>  Class class = [NSURLSession sharedSession].class;
+
+  SEL originalSelector = @selector(downloadTaskWithURL:);
+
+  // Use this to create the replacement IMP inline
+  IMP replacement = imp_implementationWithBlock(^NSURLSessionDownloadTask * (id _self, NSURL *url){
+
+      NSLog(@"%s", __PRETTY_FUNCTION__);
+
+      return OriginalDownloadedTaskWithURL(_self, _cmd, url);
+  });
+
+  IMP *store = (IMP *)&amp;OriginalDownloadedTaskWithURL;
+
+  IMP originalImp = NULL;
+  Method method = class_getInstanceMethod(class, originalSelector);
+  if (method) {
+      const char *type = method_getTypeEncoding(method);
+      originalImp = class_replaceMethod(class, originalSelector, replacement, type);
+      if (!originalImp) {
+          originalImp = method_getImplementation(method);
+      }
+  }
+  if (originalImp &amp;&amp; store) { *store = originalImp; }
+</code></pre>
+
+<p>  });
+}
+```</p></li>
+</ul>
+
 
 <h5>Icon attribution:</h5>
 
