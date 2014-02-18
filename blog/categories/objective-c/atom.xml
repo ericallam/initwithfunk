@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Objective-C | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/objective-c/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-02-18T13:23:15+00:00</updated>
+  <updated>2014-02-18T14:58:20+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -22,7 +22,7 @@
 
 <p><a href="http://nshipster.com/method-swizzling/">Method swizzling</a> has recently hit the mainstream. It&rsquo;s a technique we use at <a href="http://www.codeschool.com/paths/ios">Code School</a> quite a bit. For example, if you look inside the downloaded projects for <a href="http://ios7.codeschool.com/levels/1">Core iOS 7</a>, you&rsquo;ll see plenty of swizzling going on and most of the time the technique described in mattt&rsquo;s <a href="http://nshipster.com/method-swizzling/">post</a> is sufficient. But every once in awhile you&rsquo;ll try to sizzle a method and for some strange reason it doesn&rsquo;t work. It&rsquo;s like the class is immune to your swizzling ways.</p>
 
-<p>I ran into one of these immune classes when trying to swizzle the <code>downloadTaskWithURL:</code> method on <code>NSURLSession</code> using the traditional category-based technique. I wanted to make sure the <a href="http://www.codeschool.com/paths/ios">Code School</a> student called <code>downloadTaskWithURL:</code> with the correct parameters.</p>
+<p>I ran into one of these immune classes when trying to swizzle the <code>downloadTaskWithURL:</code> method on <code>NSURLSession</code> using the traditional category-based technique. I wanted to make sure the <a href="http://www.codeschool.com/paths/ios">Code School</a> student called <code>downloadTaskWithURL:</code> with the correct parameters<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
 
 <p>Here what the calling-code looked like:</p>
 
@@ -121,7 +121,7 @@ Class class = [NSURLSession sharedSession].class;
 
 <p>Unfortunately, that led to the <code>class_getInstanceMethod(class, swizzledSelector)</code> call returning nil since it was no longer looking in the class that included the <code>xxx_downloadTaskWithURL:</code> method. Replacing that code with <code>class_getInstanceMethod(self.class, swizzledSelector)</code> won&rsquo;t work either, leading to a <code>-[__NSCFURLSession xxx_downloadTaskWithURL:]: unrecognized selector</code> error when the implementation of the swizzle method tries to call back to the original method that doesn&rsquo;t exist.</p>
 
-<h3>The &ldquo;Indie&rdquo; Swizzle<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup></h3>
+<h3>The &ldquo;Indie&rdquo; Swizzle<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup></h3>
 
 <p>It turns out there is a more direct way to swizzle methods without first defining the replacement method on the same class as the original method. <a href="https://twitter.com/mikeash">Mike Ash</a> details this technique in a fantastic swizzling <a href="https://www.mikeash.com/pyblog/friday-qa-2010-01-29-method-replacement-for-fun-and-profit.html">Friday Q&amp;A</a>:</p>
 
@@ -187,9 +187,9 @@ return task;
 
 <h3>Why doesn&rsquo;t category-based swizzling work for NSURLSession?</h3>
 
-<p>I&rsquo;m not exactly sure what makes <code>NSURLSession</code> immune to the category based swizzle. I think it has something to do with it possibly being a class-cluster, or maybe it has to do with it being a toll-free bridged class to <code>__NSCFURLSession</code>. I&rsquo;m not sure.</p>
+<p>I don&rsquo;t know what makes <code>NSURLSession</code> immune to the category based swizzle, but I&rsquo;d love to (my Objective-C runtime skills are just dangerous enough to put this together). I think it has something to do with it being a class-cluster, or maybe it has to do with it being a toll-free bridged class to <code>__NSCFURLSession</code>. I&rsquo;m not sure.</p>
 
-<p>If you know the answer, I&rsquo;d love to hear about it. Message me on twitter <a href="http://twitter.com/eallam">@eallam</a>.</p>
+<p>If you know the answer, or have a suggestion for further research, I&rsquo;d love to hear about it and update this post. Message me on twitter <a href="http://twitter.com/eallam">@eallam</a>.</p>
 
 <h3><strong>UPDATE</strong></h3>
 
@@ -248,7 +248,9 @@ static NSURLSessionDownloadTask * (<em>OriginalDownloadedTaskWithURL)(id, SEL, N
 <hr/>
 <ol>
 <li id="fn:1">
-<p>&ldquo;Indie&rdquo; because the replacement method implementation is independent of the class being swizzled<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<p>These are downloadable throwaway projects to help our students practice and learn. So it was safe to swizzle as long as it worked consistently. I wouldn&rsquo;t suggest every putting this in shipping code.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>&ldquo;Indie&rdquo; because the replacement method implementation is independent of the class being swizzled<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
 </ol>
 </div>
 
