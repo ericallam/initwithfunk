@@ -57,6 +57,7 @@ function testFeatures() {
 function addCodeLineNumbers() {
   if (navigator.appName === 'Microsoft Internet Explorer') { return; }
   $('div.gist-highlight').each(function(code) {
+    debugger
     var tableStart = '<table><tbody><tr><td class="gutter">',
         lineNumbers = '<pre class="line-numbers">',
         tableMiddle = '</pre></td><td class="code">',

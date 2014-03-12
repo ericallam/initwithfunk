@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="Method swizzling has recently hit the mainstream. It&rsquo;s a technique we use at Code School quite a bit. For example, if you look inside the &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="Rob Napier&rsquo;s recent talk on iOS security inspired me to implement certificate pinning for an iOS app I am working on1. If you haven&rsquo;t &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,271 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2014/03/12/afnetworking-ssl-pinning-with-self-signed-certificates/">
+		
+			AFNetworking SSL Pinning With Self-Signed Certificates</a>
+	</h2>
+	<div class="entry-content">
+		<p>Rob Napier&rsquo;s recent talk on <a href="http://renaissance.io/2014/sessions/get_security_and_privacy_right">iOS security</a> inspired me to implement certificate pinning for an iOS app I am working on<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>. If you haven&rsquo;t heard of it before, there is a good introduction to the technique over at the <a href="https://www.owasp.org/index.php/Certificate_and_Public_Key_Pinning">Open Web Application Security Project</a>. The basic idea is that, if you control both the server and client that want to talk over https, there is no need to use third-party Certificate Authorities (of which there are <a href="http://support.apple.com/kb/ht5012">many</a> you explicitly trust without using pinning), because you already have knowledge of the certificate the server will use, so you can just take that server certificate and put it in your client. Then when the client wants to connect to the server it can just match the bundled certificate with the one from the server.</p>
+
+<p>It&rsquo;s a fairly new idea that gained traction back in 2011 when <a href="https://www.imperialviolet.org/2011/05/04/pinning.html">Chrome implemented pinning for google.com</a> which allowed it to expose a man-in-the-middle attack caused by a <a href="http://googleonlinesecurity.blogspot.co.uk/2011/08/update-on-attempted-man-in-middle.html">fraudulent SSL certificate issued by the CA DigiNotar</a>.</p>
+
+<p><a href="https://github.com/AFNetworking/AFNetworking/releases/tag/2.2.0">AFNetworking 2.2.0</a> was recently released with updates to it&rsquo;s SSL Pinning abilities. Unfortunately, the documentation for implementing pinning is confusing/non-existent, especially when it comes to self-signed certificates (include some stuff that is just broken). The following is how I was able to implement certificate pinning with self-signed certificates in my app with AFNetworking 2.2.</p>
+
+<h3>The self-signed certificate question</h3>
+
+<p>The first problem I ran into is whether or not I should use a self-signed certificate, instead of a certificate issued by a third-party authority such as Verisign<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>. I chose to go the route of a self-signed certificate, because I wanted to pin my app to my own self-signed Certificate Authority (CA)<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>. This means that my app will connect to any server that uses certificates issued by my self-signed CA. This is safer then pinning to a specific certificate because I didn&rsquo;t want to worry about updating clients for expiring certificates. This is  Rob Napier&rsquo;s advice from his <a href="http://renaissance.io/2014/sessions/get_security_and_privacy_right">talk</a> mentioned above.</p>
+
+<p><span style='font-size: 0.8em;'><strong>Note</strong>: If your server is also going to be used as a public facing website (and not just an API server like the one I am building), and want to serve content over HTTPS, you are going to need to go the third-party CA route, since if you serve a self-signed cert to a browser, the user will end up just seeing a distressing message about a bum certificate.</span></p>
+
+<h3>Create the CA and certs</h3>
+
+<p>Apple has a <a href="https://developer.apple.com/library/ios/technotes/tn2326/_index.html#//apple_ref/doc/uid/DTS40014136-CH1-SECISSUE_C">great technical note</a> for creating self-signed CA&rsquo;s and certs. It&rsquo;s ostensibly about doing this for testing purposes, but it should work just fine for production apps using pinning. I followed the directions in the technical note exactly you and ended up with all the certs I needed for implementing pinning.</p>
+
+<h3>Configuring the Server</h3>
+
+<p>After I created the appropriate certs, I needed to setup my server for SSL. I&rsquo;m using nginx and it&rsquo;s fairly straightforward to setup. I uploaded the exported self-signed certificate (the &ldquo;p12&rdquo; file) to the <code>/etc/nginx/ssl</code> directory on my server using scp:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ scp ServerCertificate.p12 user@myserver.com:/etc/nginx/ssl</span></code></pre></td></tr></table></div></figure>
+
+
+<p><span style='font-size: 0.8em;'><strong>Note:</strong> Make sure to upload the p12 file to the server before extracting the private key and certificate so your private key stays safe during transit.</span></p>
+
+<p>Next, I extracted the server certificate&rsquo;s private key and cert (entering the password I set during export):</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>user@myserver.com: $ openssl pkcs12 -in ServerCertificate.p12 -nokeys -out server.crt
+</span><span class='line'>user@myserver.com: $ openssl pkcs12 -in ServerCertificate.p12 -nocerts -nodes -out server.key</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now I had two files on my server, <code>/etc/nginx/ssl/server.crt</code> and <code>/etc/nginx/ssl/server.key</code>. I updated my nginx config (usually found at <code>/etc/nginx/nginx.conf</code>) to flip on ssl for my server:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> server {
+</span><span class='line'>    listen 443;
+</span><span class='line'>    server_name myserver.com;
+</span><span class='line'>    root /path/to/my/root;
+</span><span class='line'>    ssl on;
+</span><span class='line'>    ssl_certificate /etc/nginx/ssl/server.crt;
+</span><span class='line'>    ssl_certificate_key /etc/nginx/ssl/server.key;
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p><span style='font-size: 0.8em;'><strong>Note:</strong> You don&rsquo;t need to have the CA root certificate on the server, or concatenate the CA root cert with the server.crt file or anything like that. I spent too much time working under that assumption and took a couple of wrong turns before realizing it wasn&rsquo;t necessary.</span></p>
+
+<p>After restarting nginx I made sure it was working by downloading the server&rsquo;s certificate using <code>openssl</code>, like so:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ openssl s_client -connect myserver.com:443</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This printed a bunch of information about the SSL certificate for myserver.com. The output had &ldquo;Verify return code: 21 (unable to verify the first certificate)&rdquo;. This just means that openssl couldn&rsquo;t verify the root certificate (since it doesn&rsquo;t know anything about my self-signed CA cert). When I passed in my CA certificate  the SSL handshake resulted in &ldquo;Verify return code: 0 (ok)&rdquo;:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ openssl s_client -connect myserver.com:443 -CAfile ./MyCACertificate.pem</span></code></pre></td></tr></table></div></figure>
+
+
+<p><span style='font-size: 0.8em;'><strong>Note:</strong> openssl expects the CA cert to be in PEM format. Convert it to PEM using <code>openssl x509 -inform DER -in MyCACertificate.cer -out MyCACertificate.pem</code></span></p>
+
+<h3>Pinning the app with AFNetworking 2.2</h3>
+
+<p>Pinning to a self-signed CA with AFNetworking 2.2 <a href="https://github.com/AFNetworking/AFNetworking/issues/1852">is broken</a>. Host-name validation<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup> is also a mess, and expects your server certificate to have a Common Name that matches the host, even though using Common Name is <a href="https://github.com/AFNetworking/AFNetworking/issues/1891">not really the correct way to do host-name checking</a>. It also requires you to set the <code>allowInvalidCertificates</code> property on your security policy to <code>YES</code>, which entirely skips <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustEvaluate">iOS&rsquo;s built-in way</a> for verifying certificates based on <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">RFC 2818</a>.</p>
+
+<p>It instead requires you to have the entire certificate chain<sup id="fnref:5"><a href="#fn:5" rel="footnote">5</a></sup> in your app, or just the server cert<sup id="fnref:6"><a href="#fn:6" rel="footnote">6</a></sup>, but I just want to pin my app to the CA root cert.</p>
+
+<p>It turns out that Rob Napier has already <a href="http://robnapier.net/pinning-your-ssl-certs/">implemented this exact type of pinning</a> in the standalone library <a href="https://github.com/rnapier/RNPinnedCertValidator">RNPinnedCertValidator</a>. It works by modifying the &ldquo;server trust&rdquo; object to only check against the anchor<sup id="fnref:7"><a href="#fn:7" rel="footnote">7</a></sup> certificates pinned in the app. Everything else about the certificate verification stays the same<sup id="fnref:8"><a href="#fn:8" rel="footnote">8</a></sup>.</p>
+
+<p>It&rsquo;s a pretty simple bit of code, so I created a subclass of <code>AFSecurityPolicy</code> and overrode the <code>evaluateServerTrust:forDomain:</code> method:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="cp">#import &quot;STPSecurityPolicy.h&quot;</span>
+</span><span class='line'><span class="cp">#import &lt;Security/Security.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">static</span> <span class="n">NSArray</span> <span class="o">*</span><span class="nf">STPTrustedCertificates</span><span class="p">(</span><span class="n">NSArray</span> <span class="o">*</span><span class="n">certs</span><span class="p">){</span>
+</span><span class='line'>    <span class="n">NSMutableArray</span> <span class="o">*</span><span class="n">secCerts</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSMutableArray</span> <span class="nl">arrayWithCapacity:</span><span class="n">certs</span><span class="p">.</span><span class="n">count</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="n">NSData</span> <span class="o">*</span><span class="n">certData</span> <span class="k">in</span> <span class="n">certs</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">SecCertificateRef</span> <span class="n">certRef</span> <span class="o">=</span> <span class="n">SecCertificateCreateWithData</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="p">(</span><span class="n">__bridge</span> <span class="n">CFDataRef</span><span class="p">)(</span><span class="n">certData</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">[</span><span class="n">secCerts</span> <span class="nl">addObject:</span><span class="n">CFBridgingRelease</span><span class="p">(</span><span class="n">certRef</span><span class="p">)];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">[</span><span class="n">secCerts</span> <span class="n">copy</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@implementation</span> <span class="nc">STPSecurityPolicy</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">evaluateServerTrust:</span><span class="p">(</span><span class="n">SecTrustRef</span><span class="p">)</span><span class="nv">serverTrust</span> <span class="nf">forDomain:</span><span class="p">(</span><span class="n">NSString</span> <span class="o">*</span><span class="p">)</span><span class="nv">domain</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">SecTrustSetAnchorCertificates</span><span class="p">(</span><span class="n">serverTrust</span><span class="p">,</span> <span class="p">(</span><span class="n">__bridge</span> <span class="n">CFArrayRef</span><span class="p">)</span><span class="n">STPTrustedCertificates</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">pinnedCertificates</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">SecTrustResultType</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">OSStatus</span> <span class="n">status</span> <span class="o">=</span> <span class="n">SecTrustEvaluate</span><span class="p">(</span><span class="n">serverTrust</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">result</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="n">errSecSuccess</span> <span class="o">&amp;&amp;</span>
+</span><span class='line'>        <span class="p">(</span><span class="n">result</span> <span class="o">==</span> <span class="n">kSecTrustResultProceed</span> <span class="o">||</span>
+</span><span class='line'>         <span class="n">result</span> <span class="o">==</span> <span class="n">kSecTrustResultUnspecified</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">return</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>STPTrustedCertificates</code> function just converts the <code>pinnedCertificates</code> array into an array of <code>SecCertificateCreateWithData</code> objects (to conform to what <code>SecTrustSetAnchorCertificates</code> expects). <code>SecTrustSetAnchorCertificates</code> is the Security.h function that modifies the <code>serverTrust</code> to only trust the certs passed in. From <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustSetAnchorCertificates">the docs</a>:</p>
+
+<p><span style='font-size: 0.8em;'>When you call the SecTrustSetAnchorCertificates function, you are effectively telling the SecTrustEvaluate function to use the anchor certificates in the specified array to evaluate trust regardless of any user-specified trust settings for those certificates. Furthermore, any intermediate certificates based on those anchor certificates are also trusted without consulting user trust settings.</span></p>
+
+<p>Then I delegate to <code>SecTrustEvaluate</code> to make sure the server&rsquo;s cert is valid. If the result is either &ldquo;proceed&rdquo; or &ldquo;unspecified&rdquo;, then return YES, otherwise return NO<sup id="fnref:9"><a href="#fn:9" rel="footnote">9</a></sup>.</p>
+
+<p>To use this subclass, I just set an instance of it as the <code>securityPolicy</code> of my <code>AFHTTPSessionManager</code> subclass, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">client</span> <span class="o">=</span> <span class="p">[[</span><span class="n">STPAPIClient</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithBaseURL:</span><span class="n">baseURL</span> <span class="nl">sessionConfiguration:</span><span class="n">configuration</span><span class="p">];</span>
+</span><span class='line'><span class="n">client</span><span class="p">.</span><span class="n">securityPolicy</span> <span class="o">=</span> <span class="p">[</span><span class="n">STPSecurityPolicy</span> <span class="n">defaultPolicy</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">caCertificatePath</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NSBundle</span> <span class="n">mainBundle</span><span class="p">]</span> <span class="nl">pathForResource:</span><span class="s">@&quot;MyCA&quot;</span> <span class="nl">ofType:</span><span class="s">@&quot;der&quot;</span><span class="p">];</span>
+</span><span class='line'><span class="n">NSData</span> <span class="o">*</span><span class="n">caCertificate</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSData</span> <span class="nl">dataWithContentsOfFile:</span><span class="n">caCertificatePath</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">client</span><span class="p">.</span><span class="n">securityPolicy</span><span class="p">.</span><span class="n">pinnedCertificates</span> <span class="o">=</span> <span class="err">@</span><span class="p">[</span><span class="n">caCertificate</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As you can see I&rsquo;m setting the pinned certificates explicitely to just the CA root certificate, which means that the certificate has been added to the project. The cert has to be in the &ldquo;DER&rdquo; format (Keychain Access exports certificates in this format). If it&rsquo;s in &ldquo;PEM&rdquo;, then convert it to DER before adding to your project using <code>openssl</code>, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">$</span> <span class="n">openssl</span> <span class="n">x509</span> <span class="o">-</span><span class="k">in</span> <span class="n">MyCA</span><span class="p">.</span><span class="n">pem</span> <span class="o">-</span><span class="n">outform</span> <span class="n">der</span> <span class="o">-</span><span class="n">out</span> <span class="n">MyCA</span><span class="p">.</span><span class="n">der</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>After doing this and adding <code>MyCA.der</code> to the project, the certificate pinning worked!</p>
+
+<h3>Thoughts, Questions, Concerns, and Confusion</h3>
+
+<ul>
+<li><p>I don&rsquo;t like hacking AFNetworking in this way, and would like to work together with the maintainers to get both better documentation and a better implementation for this scenario. But it&rsquo;s a credit to the API design of AFNetworking that this was so easy to change.</p></li>
+<li><p>If I wasn&rsquo;t using AFNetworking then I would just use <a href="https://github.com/rnapier/RNPinnedCertValidator">RNPinnedCertValidator</a>, leaving everything else the same.</p></li>
+<li><p>This is making me paranoid about my server&rsquo;s private keys and my own computer&rsquo;s security. I know just enough to be dangerous. This whole week-long investigation makes me appreciate the hell out of people who do sysops.</p></li>
+<li><p>How does everyone else do pinning? Also, what&rsquo;s the difference between certificate and public key pinning? Is one better than the other? Why are there two different ways to do this?</p></li>
+<li><p>The <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustSetAnchorCertificates">iOS Security APIs</a> are WAY behind of <a href="https://developer.apple.com/library/mac/documentation/security/Reference/certifkeytrustservices/Reference/reference.html">OS X&rsquo;s</a>. I&rsquo;m guessing most of the discrepency is because on iOS you are supposed to fail if cert trust can&rsquo;t be established, where on OS X you are given a chance to recover from failure by showing the user a dialog that allows them to set explicit trust. Although the <a href="https://developer.apple.com/library/mac/documentation/security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustGetTrustResult"><code>SecTrustGetTrustResult</code></a> function on OS X doesn&rsquo;t do at all what the doc suggests. It returns the same exact set of constants that <code>SecTrustEvaluate</code> returns, even though the docs suggest it should return actual reasons why <code>SecTrustEvaluate</code> failed. It&rsquo;s not at all a replacement for the deprecated <code>SecTrustGetResult</code>. As of 10.9 there is no non-deprecated way to recover from <code>kSecTrustResultRecoverableTrustFailure</code>. Time to fail some radars.</p></li>
+<li><p>Protecting against MITM needs to be much easier than this. It&rsquo;s too easy to leak data between an app and a server. Setting up SSL should be easier than this.</p></li>
+<li><p>It&rsquo;s also possible that I&rsquo;m just a dummy and it IS easy for everyone else, which is something I suspect to be true.</p></li>
+<li><p>Almost every single <a href="https://www.digitalocean.com/community/articles/how-to-create-a-ssl-certificate-on-nginx-for-ubuntu-12-04">tutorial</a> I read on generating self-signed certs recommend that you put your server&rsquo;s hostname in the Common Name field, even though the <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">HTTPS RFC</a> clearly states that you should use the subjectAltName extension for hostname checking (only old ssl clients use the Common Name for hostname checking).</p></li>
+</ul>
+
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>That story coming soon.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>You don&rsquo;t need to use a self-signed certificate to get the benefits of pinning. Pinning works just as well with pinning to a cert issued by a third party, although you might run into problems when the certificate expires.<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Just like you can create your own certificates, you can create your own certificate authorities, and then use that certificate authority to issue server certificates.<a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+<li id="fn:4">
+<p>Host-name validation just ensures that the server you are attempting to (e.g. myserver.com) is serving a certificate for myserver.com and not some other host.<a href="#fnref:4" rev="footnote">&#8617;</a></p></li>
+<li id="fn:5">
+<p>In my case, that would be both the server certificate and the CA root certificate. It&rsquo;s possible to have a larger chain though. A common setup is to have an intermediate certificate between the CA and the server cert. So in that case you&rsquo;d need all three certificates in the app.<a href="#fnref:5" rev="footnote">&#8617;</a></p></li>
+<li id="fn:6">
+<p>Also known as the &ldquo;leaf&rdquo; or &ldquo;End-Entity&rdquo; certificate. See <a href="https://github.com/AFNetworking/AFNetworking/issues/1852#issuecomment-36199389">this comment</a> for more on why this is bad.<a href="#fnref:6" rev="footnote">&#8617;</a></p></li>
+<li id="fn:7">
+<p>The &ldquo;Anchor&rdquo; cert is the one that issued the server certificate. It could be a root CA cert, or an intermediate cert.<a href="#fnref:7" rev="footnote">&#8617;</a></p></li>
+<li id="fn:8">
+<p>Including host-name checking. You can see for yourself which SSL policies a server trust object implements using <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustCopyPolicies"><code>SecTrustCopyPolicies</code></a><a href="#fnref:8" rev="footnote">&#8617;</a></p></li>
+<li id="fn:9">
+<p>Credit for this code goes to Rob Napier and is under his [MIT License][18].<a href="#fnref:9" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-03-12T14:13:00+00:00" pubdate data-updated="true">Mar 12<span>th</span>, 2014</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/afnetworking/'>AFNetworking</a>, <a class='category' href='/blog/categories/ssl/'>SSL</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
