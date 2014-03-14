@@ -4,7 +4,7 @@
   <title><![CDATA[Category: SSL | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ssl/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-14T17:39:03+00:00</updated>
+  <updated>2014-03-14T17:56:39+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -88,6 +88,8 @@ $ openssl s_client -connect myserver.com:443 -CAfile ./MyCACertificate.pem
 <p>Pinning to a self-signed CA with AFNetworking 2.2 <a href="https://github.com/AFNetworking/AFNetworking/issues/1852">is broken</a>. Host-name validation<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup> is also a mess, and expects your server certificate to have a Common Name that matches the host, even though using Common Name is <a href="https://github.com/AFNetworking/AFNetworking/issues/1891">not really the correct way to do host-name checking</a>. It also requires you to set the <code>allowInvalidCertificates</code> property on your security policy to <code>YES</code>, which entirely skips <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustEvaluate">iOS&rsquo;s built-in way</a> for verifying certificates based on <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">RFC 2818</a>.</p>
 
 <p>It instead requires you to have the entire certificate chain<sup id="fnref:5"><a href="#fn:5" rel="footnote">5</a></sup> in your app, or just the server cert<sup id="fnref:6"><a href="#fn:6" rel="footnote">6</a></sup>, but I just want to pin my app to the CA root cert.</p>
+
+<p><strong>Update:</strong> AFNetworking 2.2.1 <a href="https://github.com/AFNetworking/AFNetworking/releases/tag/2.2.1">has been released</a> that includes fixes for these problems. You no longer need to do the hack below, instead just set <code>allowInvalidCertificates</code> to YES and everything should work (the naming of that property is a bit unfortunate as it sounds like you are doing something bad. It simply means &ldquo;allow self-signed certificates&rdquo;).</p>
 
 <p>It turns out that Rob Napier has already <a href="http://robnapier.net/pinning-your-ssl-certs/">implemented this exact type of pinning</a> in the standalone library <a href="https://github.com/rnapier/RNPinnedCertValidator">RNPinnedCertValidator</a>. It works by modifying the &ldquo;server trust&rdquo; object to only check against the anchor<sup id="fnref:7"><a href="#fn:7" rel="footnote">7</a></sup> certificates pinned in the app. Everything else about the certificate verification stays the same<sup id="fnref:8"><a href="#fn:8" rel="footnote">8</a></sup>.</p>
 
