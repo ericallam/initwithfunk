@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-14T17:56:39+00:00</updated>
+  <updated>2014-03-14T17:58:25+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -212,7 +212,7 @@
 <h3>Thoughts, Questions, Concerns, and Confusion</h3>
 
 <ul>
-<li><p>I don&rsquo;t like hacking AFNetworking in this way, and would like to work together with the maintainers to get both better documentation and a better implementation for this scenario. But it&rsquo;s a credit to the API design of AFNetworking that this was so easy to change.</p></li>
+<li><p>I don&rsquo;t like hacking AFNetworking in this way, and would like to work together with the maintainers to get both better documentation and a better implementation for this scenario. But it&rsquo;s a credit to the API design of AFNetworking that this was so easy to change. <strong>Update:</strong> AFNetworking 2.2.1 <a href="https://github.com/AFNetworking/AFNetworking/releases/tag/2.2.1">has been released</a> that fixes self-signed pinning. Read the release notes for instructions on how to get it to work.</p></li>
 <li><p>If I wasn&rsquo;t using AFNetworking then I would just use <a href="https://github.com/rnapier/RNPinnedCertValidator">RNPinnedCertValidator</a>, leaving everything else the same.</p></li>
 <li><p>This is making me paranoid about my server&rsquo;s private keys and my own computer&rsquo;s security. I know just enough to be dangerous. This whole week-long investigation makes me appreciate the hell out of people who do sysops.</p></li>
 <li><p>How does everyone else do pinning? Also, what&rsquo;s the difference between certificate and public key pinning? Is one better than the other? Why are there two different ways to do this?</p></li>
