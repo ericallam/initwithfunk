@@ -4,7 +4,7 @@
   <title><![CDATA[Category: iOS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ios/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-12T14:50:35+00:00</updated>
+  <updated>2014-03-14T17:39:03+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -181,6 +181,8 @@ $ openssl x509 -in MyCA.pem -outform der -out MyCA.der
 <li><p>Almost every single <a href="https://www.digitalocean.com/community/articles/how-to-create-a-ssl-certificate-on-nginx-for-ubuntu-12-04">tutorial</a> I read on generating self-signed certs recommend that you put your server&rsquo;s hostname in the Common Name field, even though the <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">HTTPS RFC</a> clearly states that you should use the subjectAltName extension for hostname checking (only old ssl clients use the Common Name for hostname checking).</p></li>
 </ul>
 
+
+<p>Let me know if I got anything wrong by messaging me <a href="http://twitter.com/eallam">on twitter</a>. I am afterall a <a href="http://edgecasesshow.com/061-a-cryptography-tourist.html">cryptography tourist</a>.</p>
 <div class="footnotes">
 <hr/>
 <ol>
