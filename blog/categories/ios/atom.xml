@@ -4,7 +4,7 @@
   <title><![CDATA[Category: iOS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ios/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-14T17:58:25+00:00</updated>
+  <updated>2014-03-15T11:14:27+00:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -32,7 +32,7 @@
 
 <h3>Create the CA and certs</h3>
 
-<p>Apple has a <a href="https://developer.apple.com/library/ios/technotes/tn2326/_index.html#//apple_ref/doc/uid/DTS40014136-CH1-SECISSUE_C">great technical note</a> for creating self-signed CA&rsquo;s and certs. It&rsquo;s ostensibly about doing this for testing purposes, but it should work just fine for production apps using pinning. I followed the directions in the technical note exactly you and ended up with all the certs I needed for implementing pinning.</p>
+<p>Apple has a <a href="https://developer.apple.com/library/ios/technotes/tn2326/_index.html#//apple_ref/doc/uid/DTS40014136-CH1-SECISSUE_C">great technical note</a> for creating self-signed CA&rsquo;s and certs. It&rsquo;s ostensibly about doing this for testing purposes, but it should work just fine for production apps using pinning. I followed the directions in the technical note exactly and ended up with all the certs I needed for implementing pinning.</p>
 
 <h3>Configuring the Server</h3>
 
@@ -85,7 +85,7 @@ $ openssl s_client -connect myserver.com:443 -CAfile ./MyCACertificate.pem
 
 <h3>Pinning the app with AFNetworking 2.2</h3>
 
-<p>Pinning to a self-signed CA with AFNetworking 2.2 <a href="https://github.com/AFNetworking/AFNetworking/issues/1852">is broken</a>. Host-name validation<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup> is also a mess, and expects your server certificate to have a Common Name that matches the host, even though using Common Name is <a href="https://github.com/AFNetworking/AFNetworking/issues/1891">not really the correct way to do host-name checking</a>. It also requires you to set the <code>allowInvalidCertificates</code> property on your security policy to <code>YES</code>, which entirely skips <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustEvaluate">iOS&rsquo;s built-in way</a> for verifying certificates based on <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">RFC 2818</a>.</p>
+<p>Pinning to a self-signed CA with AFNetworking 2.2 <a href="https://github.com/AFNetworking/AFNetworking/issues/1852"><strike>is</strike> was broken</a>. Host-name validation<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup> is also a mess, and expects your server certificate to have a Common Name that matches the host, even though using Common Name is <a href="https://github.com/AFNetworking/AFNetworking/issues/1891">not really the correct way to do host-name checking</a>. It also requires you to set the <code>allowInvalidCertificates</code> property on your security policy to <code>YES</code>, which entirely skips <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustEvaluate">iOS&rsquo;s built-in way</a> for verifying certificates based on <a href="ftp://ftp.isi.edu/in-notes/rfc2818.txt">RFC 2818</a>.</p>
 
 <p>It instead requires you to have the entire certificate chain<sup id="fnref:5"><a href="#fn:5" rel="footnote">5</a></sup> in your app, or just the server cert<sup id="fnref:6"><a href="#fn:6" rel="footnote">6</a></sup>, but I just want to pin my app to the CA root cert.</p>
 
@@ -205,7 +205,7 @@ $ openssl x509 -in MyCA.pem -outform der -out MyCA.der
 <li id="fn:8">
 <p>Including host-name checking. You can see for yourself which SSL policies a server trust object implements using <a href="https://developer.apple.com/library/ios/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html#//apple_ref/c/func/SecTrustCopyPolicies"><code>SecTrustCopyPolicies</code></a><a href="#fnref:8" rev="footnote">&#8617;</a></p></li>
 <li id="fn:9">
-<p>Credit for this code goes to Rob Napier and is under his [MIT License][18].<a href="#fnref:9" rev="footnote">&#8617;</a></p></li>
+<p>Credit for this code goes to Rob Napier and is under his <a href="https://github.com/rnapier/RNPinnedCertValidator/blob/master/LICENSE">MIT License</a>.<a href="#fnref:9" rev="footnote">&#8617;</a></p></li>
 </ol>
 </div>
 
