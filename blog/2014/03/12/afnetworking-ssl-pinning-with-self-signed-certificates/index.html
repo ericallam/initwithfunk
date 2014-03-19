@@ -68,7 +68,7 @@
 
 <p>It&rsquo;s a fairly new idea that gained traction back in 2011 when <a href="https://www.imperialviolet.org/2011/05/04/pinning.html">Chrome implemented pinning for google.com</a> which allowed it to expose a man-in-the-middle attack caused by a <a href="http://googleonlinesecurity.blogspot.co.uk/2011/08/update-on-attempted-man-in-middle.html">fraudulent SSL certificate issued by the CA DigiNotar</a>.</p>
 
-<p><a href="https://github.com/AFNetworking/AFNetworking/releases/tag/2.2.0">AFNetworking 2.2.1</a> was recently released with updates to it&rsquo;s SSL pinning with self-signed certificate abilities that makes this relatively easy to implement. The tricky part is all the different ways you can generate certificates, the different formats, etc. Below is how I got it to work for my app, hopefully it will be helpful to someone else looking to do the same thing.</p>
+<p><a href="https://github.com/AFNetworking/AFNetworking/releases/tag/2.2.0">AFNetworking 2.2.1</a> was recently released with updates to it&rsquo;s SSL pinning with self-signed certificate abilities that makes this relatively easy to implement. The tricky part is all the different ways you can generate certificates, configuring the server, the different formats, and generally putting it all together. Below is how I got it to work for my app, hopefully it will be helpful to someone else looking to do the same thing.</p>
 
 <h3>The self-signed certificate question</h3>
 
