@@ -4,7 +4,7 @@
   <title><![CDATA[Category: iOS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ios/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-19T11:44:45+00:00</updated>
+  <updated>2014-05-22T16:47:31+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,791 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Interactive Animated Transitions on iOS]]></title>
+    <link href="http://initwithfunk.com/blog/2014/05/22/interactive-animated-transitions-on-ios/"/>
+    <updated>2014-05-22T15:59:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2014/05/22/interactive-animated-transitions-on-ios</id>
+    <content type="html"><![CDATA[<p>I closed <a href="https://speakerdeck.com/rubymaverick/uikonf-2014-building-better-transition">my talk at UIKonf</a> by talking about a technique to build better animated transitions on iOS by making them &ldquo;always interactive&rdquo;. The user should be able to interrupt an animated transition with a gesture, cancelling it any time they want. By default animated transitions will wrap the entire transition in <code>[UIApplication beginIgnoringInteractionEvents]</code>, effectively blocking all interaction during the duration of the transition. It&rsquo;s treated almost like a rotation event, which exhibits the same blocking behavior.</p>
+
+<p>It should work like this:</p>
+
+<p><img src='http://cl.ly/image/2t3r0S0n0R1J/FirstInteractiveAnimatedTransition.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The technique I&rsquo;ve been using is to just turn an animated transition into an interactive transition.</p>
+
+<p>Interactive transitions are supported by the transition system, it&rsquo;s just that they usually start with a continuous gesture, like a pinch or a screen edge pan. That gesture kicks off the transition (be it a navigation controller push/pop or a modal present/dismiss), and then once the gesture ends, the relevant views are animated into place (or off screen, whichever makes sense for that specific transition).</p>
+
+<p>And since interactive transitions don&rsquo;t block interaction (of course), then we should be able to use them to make always interactive animated transitions.</p>
+
+<p>The only difference is that the interactive transition starts with an animation, not a gesture.</p>
+
+<p>At a high level, the difference between an normal interactive transition and an interactive animated transition looks like this:</p>
+
+<p><img src='http://cl.ly/image/0P07303v3z0i/Interactive%20Animations.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p><img src='http://cl.ly/image/0d0z2C422r2y/Interactive%20Animations%20After.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>Of course it&rsquo;s a bit more complicated than the above illustration, and I touched on some of that complexity in my talk. The rest of this post will be a more detailed examination of how to implement these strange hybrid transitions.</p>
+
+<h3>Converting the Animated Transition</h3>
+
+<p>If you already have an animated transition, you&rsquo;ve had to implement these two methods of the transitioning delegate:</p>
+
+<p>```objc
+&ndash; (id<UIViewControllerAnimatedTransitioning>)</p>
+
+<pre><code>animationControllerForPresentedController:(UIViewController *)presented 
+                     presentingController:(UIViewController *)presenting 
+                         sourceController:(UIViewController *)source;
+</code></pre>
+
+<ul>
+<li>(id<UIViewControllerAnimatedTransitioning>)
+  animationControllerForDismissedController:(UIViewController *)dismissed;
+```</li>
+</ul>
+
+
+<p>The object you return from these methods conform to the <code>UIViewControllerAnimatedTransitioning</code> protocol, and are responsible for defining exactly how an animated transition works by implementing the <code>transitionDuration:</code> and <code>animateTransition:</code> methods. The transition system will call these methods after you&rsquo;ve kicked off a transition, and you can return <code>nil</code> to tell the system to just use it&rsquo;s (the transition system&rsquo;s) default transition.</p>
+
+<p>To convert an animated transition into an interactive one you will also need to implement the &ldquo;interaction&rdquo; equivalent of these methods:</p>
+
+<p>```
+&ndash; (id<UIViewControllerInteractiveTransitioning>)</p>
+
+<pre><code>interactionControllerForPresentation:(id&lt;UIViewControllerAnimatedTransitioning&gt;)animator;
+</code></pre>
+
+<ul>
+<li>(id<UIViewControllerInteractiveTransitioning>)
+  interactionControllerForDismissal:(id<UIViewControllerAnimatedTransitioning>)animator
+```</li>
+</ul>
+
+
+<p>If these methods aren&rsquo;t implemented (or you return <code>nil</code>) then the transition system falls back to the animated transition and blocks interaction during the transition, which we want to avoid.</p>
+
+<p>To turn on interactivity then all we need to do is implement these methods and return an object that conforms to the <code>UIViewControllerInteractiveTransitioning</code> protocol, which only has one required method: <code>startInteractiveTransition:</code>.</p>
+
+<p>So let&rsquo;s say we already have an animated transition that looks like this:</p>
+
+<p>```
+@interface CustomAnimatedTransition : NSObject <UIViewControllerAnimatedTransitioning>
+@property (assign, nonatomic) BOOL reversed;
+@end</p>
+
+<p>@implementation CustomAnimatedTransition</p>
+
+<ul>
+<li><p>(instancetype)init {
+  if (self = [super init]){
+      _reversed = NO;
+  }</p>
+
+<p>  return self;
+}</p></li>
+<li><p>(NSTimeInterval)transitionDuration:(id)context {
+  return 0.35;
+}</p></li>
+<li><p>(void)animateTransition:(id<UIViewControllerContextTransitioning>)context {
+  UIView <em>toView = [context
+                      viewControllerForKey:UITransitionContextToViewControllerKey].view;
+  UIView </em>fromView = [context
+                      viewControllerForKey:UITransitionContextFromViewControllerKey].view;
+  UIView *container = [context containerView];</p>
+
+<p>  NSTimeInterval duration = [self transitionDuration:context];</p>
+
+<p>  if (!self.reversed) {
+      toView.bounds = CGRectMake(0, 0, 280, 180);
+      toView.center = CGPointMake(container.center.x, -90);</p>
+
+<pre><code>  [UIView animateWithDuration:duration animations:^{
+      toView.center = container.center;
+  } completion:^(BOOL finished){
+      [context completeTransition:YES];
+  }];
+</code></pre>
+
+<p>  } else {
+      [UIView animateWithDuration:duration animations:^{
+          fromView.center = CGRectMake(0, 0, 280, 180);
+      } completion:^(BOOL finished){
+          [context completeTransition:YES];
+      }];  <br/>
+  }</p></li>
+</ul>
+
+
+<p>}</p>
+
+<p>@end
+```</p>
+
+<p>And our transitioning delegate looks like this:</p>
+
+<p>```
+&ndash; (id<UIViewControllerAnimatedTransitioning>)</p>
+
+<pre><code>animationControllerForPresentedController:(UIViewController *)presented 
+                     presentingController:(UIViewController *)presenting 
+                         sourceController:(UIViewController *)source {
+
+return CustomAnimatedTransition.new;
+</code></pre>
+
+<p>}</p>
+
+<ul>
+<li><p>(id<UIViewControllerAnimatedTransitioning>)
+  animationControllerForDismissedController:(UIViewController *)dismissed {</p>
+
+<p>  return ({
+      CustomAnimatedTransition *transition = CustomAnimatedTransition.new;
+      transition.reversed = YES;</p>
+
+<pre><code>  transition;
+</code></pre>
+
+<p>  });</p></li>
+</ul>
+
+
+<p>}
+```</p>
+
+<p>Notice how we implement both &ldquo;sides&rdquo; of the modal transition by using that <code>reversed</code> property. This is a fairly common technique since it&rsquo;s a good practice to have symmetrical transitions (where each side of the transition is a mirror of the other).</p>
+
+<p>To make it an interactive transition all we have to do is make this class conform to the <code>UIViewControllerInteractiveTransitioning</code> protocol and move our animation code from <code>animateTransition:</code> into <code>startInteractiveTransition:</code>, like this:</p>
+
+<p>```
+@interface CustomAnimatedTransition : NSObject</p>
+
+<pre><code>                        &lt;UIViewControllerInteractiveTransitioning, 
+                            UIViewControllerAnimatedTransitioning&gt;
+</code></pre>
+
+<p>@property (assign, nonatomic) BOOL reversed;
+@end</p>
+
+<p>@implementation CustomAnimatedTransition</p>
+
+<ul>
+<li><p>(instancetype)init {
+  if (self = [super init]){
+      _reversed = NO;
+  }</p>
+
+<p>  return self;
+}</p></li>
+<li><p>(NSTimeInterval)transitionDuration:(id)context {
+  return 0.35;
+}</p></li>
+<li><p>(void)startInteractiveTransition:(id<UIViewControllerContextTransitioning>)context {
+  UIView <em>toView = [context
+                      viewControllerForKey:UITransitionContextToViewControllerKey].view;
+  UIView </em>fromView = [context
+                      viewControllerForKey:UITransitionContextFromViewControllerKey].view;
+  UIView *container = [context containerView];</p>
+
+<p>  NSTimeInterval duration = [self transitionDuration:context];</p>
+
+<p>  if (!self.reversed) {
+      toView.bounds = CGRectMake(0, 0, 280, 180);
+      toView.center = CGPointMake(container.center.x, -90);</p>
+
+<pre><code>  [UIView animateWithDuration:duration animations:^{
+      toView.center = container.center;
+  } completion:^(BOOL finished){
+
+      [context finishInteractiveTransition];
+      [context completeTransition:YES];
+  }];
+</code></pre>
+
+<p>  } else {
+      [UIView animateWithDuration:duration animations:^{
+          fromView.center = CGRectMake(0, 0, 280, 180);
+      } completion:^(BOOL finished){</p>
+
+<pre><code>      [context finishInteractiveTransition];
+      [context completeTransition:YES];
+  }];    
+</code></pre>
+
+<p>  }
+}</p></li>
+<li><p>(void)animateTransition:(id<UIViewControllerContextTransitioning>)context {</p></li>
+</ul>
+
+
+<p>}</p>
+
+<p>@end
+```</p>
+
+<p>The only other change in the <code>startInteractiveTransition:</code> method is the call to <code>finishInteractiveTransition</code> in the completion of the animation.</p>
+
+<p>Then, in the transitioning delegate, we can return the <code>animator</code> object passed into the interactive delegate methods (casting it to tell the compiler that this object conforms to the required <code>UIViewControllerInteractiveTransitioning</code> protocol):</p>
+
+<p>```
+&ndash; (id<UIViewControllerInteractiveTransitioning>)</p>
+
+<pre><code>interactionControllerForPresentation:(id&lt;UIViewControllerAnimatedTransitioning&gt;)animator {
+
+return (id&lt;UIViewControllerInteractiveTransitioning&gt;)animator;
+</code></pre>
+
+<p>}</p>
+
+<ul>
+<li><p>(id<UIViewControllerInteractiveTransitioning>)
+  interactionControllerForDismissal:(id<UIViewControllerAnimatedTransitioning>)animator {</p>
+
+<p>  return (id<UIViewControllerInteractiveTransitioning>)animator;  <br/>
+}
+```</p></li>
+</ul>
+
+
+<p>At this point we have a working transition with an animation, but instead of blocking all interaction, keeps the door open for a gesture to take control of the transition at any time. Before adding a gesture recognizer to handle that case, we first need to fix a bug that will occur if we were to try and use this code in a navigation controller transition. You can see that bug in action here:</p>
+
+<p><img src='http://cl.ly/image/3r2t0f2T193j/BadNavigationUpdates.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The navbar crossfade animation is delayed until after the animation finishes, instead of happening at the same time. Compare to how it should look:</p>
+
+<p><img src='http://cl.ly/image/1C0V1M2l1v3j/GoodNavigationBar.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<h3>Fixing the navbar bug</h3>
+
+<p>The transition system tries its hardest to animate the navbar along with a custom transition. With an animated transition, it knows the duration of the animation and so just tells the navbar <em>animate your crossfade using a duration of X seconds</em>. But with an interactive transition, there is no duration (the user could pan for an arbitrary amount of time).</p>
+
+<p>If there is no duration, then how could the navbar animation possibly work? Interactive transitions have a concept known as <em>completion percentage</em>. This is a number between 0.0 and 1.0 that is supposed to signify how far along the interactive transition is in it&rsquo;s own conception of &ldquo;far along&rdquo;. For example, if the interactive transition was driven be a pan gesture, from left to right, then the further to the right the user moves their pan, the further along the transition is and the closer to 1.0 it&rsquo;s <em>completion percentage</em> becomes.</p>
+
+<p><img src='http://cl.ly/image/0J1z2q3T140U/Percent%20Complete.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The transition&rsquo;s completion percentage is updated by calling the <code>updateInteractiveTransition:</code> method on the context, passing in a value between <code>0.0</code> and <code>1.0</code>.</p>
+
+<p>The transition can use this completion percentage value to manually drive the navbar animation by using features of the <code>CAMediaTiming</code> protocol. <a href="http://twitter.com/davidronnqvist">David Rönnqvist</a> has a great writeup on implementing this technique in his <a href="http://ronnqvi.st/controlling-animation-timing/">Controlling Animation Timing</a> post.</p>
+
+<p>The transition system sets the navbar layer&rsquo;s <code>speed</code> to <code>0</code>, effectively pausing it&rsquo;s animation, and then uses the completion percentage to set the <code>timeOffset</code> of the layer to &ldquo;scrub&rdquo; through the animation.</p>
+
+<p>Knowing that we need to update the completion percentage to fix the navbar bug, how do we go about doing that for our interactive animated transition, especially during the initial animation?</p>
+
+<p>The best way I&rsquo;ve found to do this is to use a <code>CADisplayLink</code>, which is like an <code>NSTimer</code> but synchronized to the refresh rate of the display. This class is usually used to drive a custom animation system (see this <a href="http://www.objc.io/issue-12/interactive-animations.html">objc.io article</a> for an example) but we are instead going to use it to calculate the completion percentage during the initial animation based on the animation&rsquo;s duration, using this formula:</p>
+
+<blockquote><p>percentComplete = elapsedTime / animationDuration;</p></blockquote>
+
+<p>This should run only during the initial animation so we&rsquo;ll setup the display link right before the animation code, like so:</p>
+
+<p>```
+self.startingTime = CACurrentMediaTime();</p>
+
+<p>self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
+[self.displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+```</p>
+
+<p>After adding it to the <code>mainRunLoop</code>, the display link will start calling the <code>tick:</code> method 60 times per second, but before that we record the <code>CACurrentMediaTime()</code> which we&rsquo;ll use to calculate the <code>elapsedTime</code>.  The <code>tick:</code> method looks like this:</p>
+
+<p>```
+&ndash; (void)tick:(CADisplayLink *)link
+{</p>
+
+<pre><code>NSTimeInterval elapedTime = link.timestamp - self.startingTime;
+NSTimeInterval duration = 0.35;
+
+CGFloat percentComplete = MIN(1.0, elapedTime / duration);
+
+[self.context updateInteractiveTransition:percentComplete];
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Using the display link&rsquo;s current <code>timestamp</code> and that <code>startingTime</code> we stashed away we can calculate the elapsed time (in seconds) and then calculate the completion percentage (capping it at <code>1.0</code>).</p>
+
+<p>When the animation finishes, the display link needs to be stopped (so it doesn&rsquo;t continue calling <code>tick:</code> until the end of time) so we need to invalidate it, like so:</p>
+
+<p>```
+[UIView animateWithDuration:duration animations:^{</p>
+
+<pre><code>        toView.center = container.center;
+    } completion:^(BOOL finished){
+
+        [self.displayLink invalidate];
+
+        [context finishInteractiveTransition];
+        [context completeTransition:YES];
+    }];
+</code></pre>
+
+<p>```</p>
+
+<h2>Introducing Interaction</h2>
+
+<p>We&rsquo;ve built the foundation for an interactive animated transition so now we can add the actual interaction bits. For this example, I&rsquo;m going to cover how to use a pan gesture recognizer to create this interaction effect:</p>
+
+<p><img src='http://cl.ly/image/2t3r0S0n0R1J/FirstInteractiveAnimatedTransition.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>During the presentation or dismissal of the modal view controller the user can interrupt the transition by panning inside the modal view, deciding either to finish or cancel the transition.</p>
+
+<p>If you&rsquo;ve ever tried to add interaction to a view that is animating you know that it doesn&rsquo;t work the same as a view at rest. That&rsquo;s because of the <strong>Model vs Presentation</strong> problem. A lot has been written about this problem and how to deal with it (including the aforementioned article on <a href="http://www.objc.io/issue-12/interactive-animations.html">interactive animations in objc.io</a>).</p>
+
+<p>The gist of the problem is that during an animation, the values of the properties being animated aren&rsquo;t their current values as shown on screen, but instead are the values those properties will become once the animation reaches completion.  An illustration of the problem:</p>
+
+<p><img src='http://cl.ly/image/0g24120n1E2V/Presentation%20vs%20Model.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>So the view only ever thinks it&rsquo;s in either the beginning location (before the animation has begun) or the ending location (once the animation finishes), but never any point inbetween while the animation is running. This is why a hit test on a view in the middle of an animation doesn&rsquo;t work as you&rsquo;d expect.</p>
+
+<p>Fortunately, you can get access to a view&rsquo;s <em>presentation</em> properties, which does reflect the property values as they are currently seen on screen, using the <code>presentation</code> property on the view&rsquo;s layer:</p>
+
+<p><img src='http://cl.ly/image/3e2h1C423k1E/Presentation%20vs%20Model%202.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>To add our pan gesture recognizer and have it only recognize when the pan happens inside of our modal view, we need to do a little extra work. First, we create it and add it to the transition&rsquo;s container view, setting our <code>CustomAnimatedTransition</code> object as the target:</p>
+
+<p>```
+UIPanGestureRecognizer *gesture = [[UIPanGestureRecognizer alloc]</p>
+
+<pre><code>                                initWithTarget:self 
+                                        action:@selector(didPan:)];
+</code></pre>
+
+<p>[container addGestureRecognizer:gesture];
+gesture.delegate = self;
+```</p>
+
+<p>This will match any pan inside the container view, so we have our <code>CustomAnimatedTransition</code> object also become the delegate of the gesture and implement the method <code>- (BOOL)gestureRecognizerShouldBegin:</code>, like this:</p>
+
+<p>```
+&ndash; (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture;
+{</p>
+
+<pre><code>CGPoint location = [gesture locationInView:self.context.containerView];
+
+CALayer *presentationLayer = self.view.layer.presentationLayer;
+
+if ([presentationLayer hitTest:location])
+{
+    return YES;
+}else{
+    return NO;
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>This method gives us the ability to decide whether a the gesture should begin before that recognizer&rsquo;s handler method is called. We use the location of the touch in the container view to do a hit test on the view&rsquo;s presentation layer, indicating that the gesture system should proceed if the touch is on the presentation layer.</p>
+
+<blockquote><p><strong>Note</strong> Not shown above are the definitions of the two properties <code>context</code> and <code>view</code> on the <code>CustomAnimatedTransition</code> class. <code>context</code> is the parameter passed into <code>startInteractiveTransition:</code> saved to a <code>weak</code> property for use in the gesture recognizer delegate and target/action methods. <code>view</code> is either the &ldquo;from&rdquo; or &ldquo;to&rdquo; view, depending on whether this is a pop/push, or presenting/dismiss. In either case, <code>view</code> always belongs to the view controller on top of the transition. For example, in a dismiss transition, <code>view</code> would be the &ldquo;from&rdquo; view controller&rsquo;s view.</p></blockquote>
+
+<p>Before we move on to implementing the gesture handler we need one more tweak to our existing code to get it to work. We need to ensure that our animation allows user interaction by including the <code>UIViewAnimationOptionAllowUserInteraction</code> option, like so:</p>
+
+<p>```
+[UIView animateWithDuration:duration</p>
+
+<pre><code>                  delay:0 
+                options:UIViewAnimationOptionAllowUserInteraction 
+                animations:^{
+
+        toView.center = container.center;
+
+    } completion:^(BOOL finished) {
+        [gesture.view removeGestureRecognizer:gesture];
+        [self.displayLink invalidate];
+
+        [context finishInteractiveTransition];
+        [context completeTransition:YES];
+    }];
+</code></pre>
+
+<p>```</p>
+
+<p>Notice also that we remove the gesture once the animation has finished.</p>
+
+<h3>The Gesture Begins</h3>
+
+<p>Time to implement the gesture handler <code>didPan:</code> method. Since we are working with a continuous gesture, <code>didPan:</code> will get called multiple times and we will be performing different actions depending on the gesture&rsquo;s state. Our first job is to handle the initial state, <code>UIGestureRecognizerStateBegan</code> and cancel all animations, allowing the user&rsquo;s gesture to take over control of the transition and the position of the view.</p>
+
+<p>```
+&ndash; (void)didPan:(UIPanGestureRecognizer *)gesture {</p>
+
+<pre><code>if (gesture.state == UIGestureRecognizerStateBegan) {
+    [self.view.layer removeAllAnimations];
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>As soon as the animations are removed from the presented/dismisses/pushed/popped view like the code above, then the view will jump to it&rsquo;s final location, not merely stopping in it&rsquo;s tracks in the current location. This is because of that <strong>Model vs Presentation</strong> problem I described above: once those animations are no longer driving the presentation, the view assumes the position of it&rsquo;s model layer, which as we now know is the view&rsquo;s final position<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>So to prevent the jumping behavior, we again have to use the presentation layer. This time we use the position of the presentation layer to set the position<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup> of the model layer before removing the animations:</p>
+
+<p>```
+&ndash; (void)didPan:(UIPanGestureRecognizer *)gesture {</p>
+
+<pre><code>if (gesture.state == UIGestureRecognizerStateBegan) {
+    CALayer *layer = self.view.layer.presentationLayer;
+    self.view.layer.position = layer.position;
+
+    [self.view.layer removeAllAnimations];
+
+    self.initialViewCenter = self.view.center;
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<blockquote><p><strong>Note</strong> We&rsquo;re stashing off the view&rsquo;s center CGPoint to use later as the gesture changes</p></blockquote>
+
+<p>Have you ever wondered what that <code>BOOL finished</code> parameter in animation completion blocks was useful for? Well wonder no more because there is finally a purpose for it! When animations are removed using <code>removeAllAnimations</code>, the animation completion block will be called and the <code>finished</code> param will be set to <code>NO</code>. We need to use this to conditionally complete the transition or our gesture and transition will be short-circuited as soon as we remove the animations:</p>
+
+<p>```
+[UIView animateWithDuration:duration</p>
+
+<pre><code>                  delay:0 
+                options:UIViewAnimationOptionAllowUserInteraction 
+                animations:^{
+
+        toView.center = container.center;
+
+    } completion:^(BOOL finished) {
+        [self.displayLink invalidate];
+
+        if (finished) {
+            [gesture.view removeGestureRecognizer:gesture];
+
+            [context finishInteractiveTransition];
+            [context completeTransition:YES];
+        }            
+    }];
+</code></pre>
+
+<p>```</p>
+
+<p>We can invalidate the display link either way because it was only for driving the completion percentage while the initial animation was running.</p>
+
+<h3>The Gesture Changes</h3>
+
+<p>We want the view to follow the users touch as they pan around the screen. As the location of the pan gesture changes the <code>didPan:</code> method will be called and the gesture&rsquo;s state will be <code>UIGestureRecognizerStateChanged</code>. We&rsquo;ll use a fairly common technique to achieve this effect:</p>
+
+<p>```
+if (gesture.state == UIGestureRecognizerStateChanged) {</p>
+
+<pre><code>CGPoint translation = [gesture translationInView:gesture.view];
+
+CGPoint centerTranslated = self.initialViewCenter;
+centerTranslated.x += translation.x;
+centerTranslated.y += translation.y;
+
+self.view.center = centerTranslated;
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>translationInView:</code> returns a point that represents how much the location of the pan has changed since the start of the gesture, so all we have to do is combine the <code>initialViewCenter</code> we stashed away at the beginning of the gesture with the translation to set the view&rsquo;s new center position.</p>
+
+<p><img src='http://cl.ly/image/3Y3R1Q1T0I3z/Translation.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>It might be tempting to save yourself from creating the <code>initialViewCenter</code> property and just resetting the translation back to <code>CGPointZero</code> after every change, but don&rsquo;t do it. Resetting the translation to zero will muck with the finishing velocity of the gesture, which we&rsquo;ll need to create a smooth continous finishing animation. As the docs for <code>setTranslation:inView:</code> pretty clearly state: <em>Changing the translation value resets the velocity of the pan</em></p>
+
+<p>The display link has been invalidated but we still need to update the completion percentage as the user pans around the screen, based on the location of the touch.  As the location moves along the y axis we&rsquo;ll update the percentage based on the distance from it&rsquo;s starting and final locations, like so:</p>
+
+<p><img src='http://cl.ly/image/1U0w1t250h1R/Pan%20Change%20Percentage.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>So we need to do this calculate for every change in the gesture.  Something like this will do:</p>
+
+<p>```
+CGFloat centerY = self.context.containerView.center.y;
+CGFloat percentComplete = MAX(MIN(self.view.center.y / centerY, 1.0), 0.0);</p>
+
+<p>if (self.reversed) percentComplete = 1.0f &ndash; percentComplete;</p>
+
+<p>[self.context updateInteractiveTransition:percentComplete];
+```</p>
+
+<h3>The Gesture Ends</h3>
+
+<p>Now might be a good time to make a fresh cup of coffee. Check Twitter. Play some <a href="http://asherv.com/threes/">Threes</a>. Because even though we have come to the end of our pan gesture, we&rsquo;ve still got a lot of work to do. We&rsquo;ve got to:</p>
+
+<ol>
+<li>Decide whether the transition should finish or be cancelled</li>
+<li>Create a smooth continous-from-the-gesture animation</li>
+<li>Complete the transition as soon as the view is offscreen</li>
+<li>Deal with both the forward and reverse cases.</li>
+</ol>
+
+
+<p>Let&rsquo;s get started :)</p>
+
+<h3>Deciding to finish or cancel</h3>
+
+<p>Before the gesture ends, the transition is in limbo. The user can decide either to finish the transition, or to cancel it. So we have to glean the meaning of the gesture that hopefully corresponds to the users assumptions about how it should work. Most tutorials I&rsquo;ve read on interactive transitions (even the ones <a href="https://www.codeschool.com/courses/core-ios-7">I&rsquo;ve made</a>) just use the location of the gesture to make the decision. Something like this:</p>
+
+<p>```
+if (gesture.state == UIGestureRecognizerStateEnded) {</p>
+
+<pre><code>CGPoint location = [gesture locationInView:gesture.view];
+
+BOOL shouldFinish = location.y &gt; 160;
+
+if (shouldFinish) {
+    // ...
+} else {
+    // ...
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>They pick a reasonable threshold value (<code>160</code>) and depending on the which side the location falls on. This is the naive approach. Instead, we should consider first the velocity of the gesture. If the user is swiping up, but lifts their touch in the middle of the screen, the view should continue along it&rsquo;s velocity and animate up off screen. Subsequently, if the user&rsquo;s finger is towards the top of the screen, but swiping down, when they let go the view it should continue towards the center. If we&rsquo;d have just used location then the opposite would have happened in both cases.</p>
+
+<p>If the velocity of the gesture is too low, indicating the user isn&rsquo;t swiping much in any direction, then we can fallback on the location to make our decision. That could look something like this:</p>
+
+<p>```
+if (gesture.state == UIGestureRecognizerStateEnded) {</p>
+
+<pre><code>CGPoint location = [gesture locationInView:gesture.view];
+
+CGPoint velocity = [gesture velocityInView:gesture.view];
+CGPoint location = [gesture locationInView:gesture.view];
+
+CGFloat kTransitionGestureVelocityThreshold = 50.0f;
+CGFloat kTransitionGestureLocationThreshold = 284.0f;
+
+BOOL shouldFinish;
+
+if (ABS(velocity.y) &gt; kTransitionGestureVelocityThreshold) {
+
+    shouldFinish = velocity.y &gt; 0;
+
+} else {
+
+    shouldFinish = location.y &gt; kTransitionGestureLocationThreshold;
+
+}
+
+if (self.reversed) shouldFinish = !shouldFinish;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Let&rsquo;s take this piece-by-piece:</p>
+
+<p><code>
+if (ABS(velocity.y) &gt; kTransitionGestureVelocityThreshold) {
+</code></p>
+
+<p>If the absolute value of the velocity in the y direction is more than some reasonable threshold (I picked <code>50</code>), then velocity is enough to decide whether the transition should finish or cancel.</p>
+
+<p><code>
+shouldFinish = velocity.y &gt; 0;
+</code></p>
+
+<p>If the <code>y</code> velocity is greater than 0 (which indicates the touches are traveling <em>down</em> the screen since the coordinate system starts in the top left) then the transition should finish.</p>
+
+<p>```
+} else {</p>
+
+<pre><code>shouldFinish = location.y &gt; kTransitionGestureLocationThreshold;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>If the velocity isn&rsquo;t large enough to decide the outcome, then fallback on the location. If the <code>y</code> location is over some threshold, then the transition should finish.</p>
+
+<p><code>
+if (self.reversed) shouldFinish = !shouldFinish;
+</code></p>
+
+<p>If the transition is running in reverse, then simply reverse the decision.</p>
+
+<p>Now that we&rsquo;ve made our decision, we have to let the transition system know that we&rsquo;re either finishing or cancelling the transition, and we can do that like so:</p>
+
+<p>```
+if (shouldFinish) {</p>
+
+<pre><code>[self.context finishInteractiveTransition];
+</code></pre>
+
+<p>} else {</p>
+
+<pre><code>[self.context cancelInteractiveTransition];
+</code></pre>
+
+<p>}
+```</p>
+
+<p>This doesn&rsquo;t do much for a modal transition, but for a navigation transition you want to make sure you remember to call these methods because the transition system will proceed to either finish the nav bar animation or reverse it.</p>
+
+<h3>Creating a smooth final animation</h3>
+
+<p>It&rsquo;s time to animate the view to it&rsquo;s final position.  First we need to determine where to animate the view to, either back off the top of the screen or to the center:</p>
+
+<p>```
+CGPoint finishCenter;</p>
+
+<p>if (shouldFinish) {</p>
+
+<pre><code>if (self.reversed) {
+    finishCenter = CGPointMake(self.context.containerView.center.x, -100);
+}else{
+    finishCenter = self.context.containerView.center;
+}
+</code></pre>
+
+<p>}else{</p>
+
+<pre><code>if (self.reversed) {
+    finishCenter = self.context.containerView.center;
+}else{
+    finishCenter = CGPointMake(self.context.containerView.center.x, -100);
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Then we can perform the final animation, like so:</p>
+
+<p>```
+[UIView animateWithDuration:0.3 animations:^{</p>
+
+<pre><code>self.view.center = finishCenter;
+</code></pre>
+
+<p>} completion:^(BOOL finished) {</p>
+
+<pre><code>[gesture.view removeGestureRecognizer:gesture];
+
+[self.context completeTransition:![self.context transitionWasCancelled]];
+</code></pre>
+
+<p>}];
+```</p>
+
+<p>Even though at this point we have a working interactive animated transition, something doesn&rsquo;t exactly feel right with that finishing animation. Take a look:</p>
+
+<p><img src='http://cl.ly/image/0X3v1b003w3g/NotExactlySmoothRight.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The animation isn&rsquo;t continuing from the velocity of the gesture, creating a feeling like we are pushing the view through goop. Unfortunately, animations driven by Core Animation aren&rsquo;t able to take initial velocity into consideration, but we have some options:</p>
+
+<ol>
+<li>UIKit Dynamics</li>
+<li>Facebook POP</li>
+<li>Custom Animations using <code>CADisplayLink</code></li>
+</ol>
+
+
+<p>These options are all thoroughly covered in the <a href="http://www.objc.io/issue-12/interactive-animations.html">Interactive Animations</a> article on <a href="http://www.objc.io">objc.io</a> that you should really check out.</p>
+
+<p>Even though Facebook&rsquo;s POP was built with this exact kind of use-case in mind, I actually rather like using UIKit Dynamics for this sort of thing. In their <a href="https://www.youtube.com/watch?v=g4eaZN2Gnsc&amp;list=PLb0IAmt7-GS2sh8saWW4z8x2vo7puwgnR&amp;index=4">tech talk</a> introducing POP to the world UIKit Dynamics is dismissed because it&rsquo;s &ldquo;hard to use it in a one off situation&rdquo; and you&rsquo;d have to change all your apps animations to use dynamics instead. I don&rsquo;t think that is the case. UIKit Dynamics can very easily be used in one-off situations like this, for when you need to &ldquo;animate&rdquo; a view following a gesture.</p>
+
+<p>So that&rsquo;s what we are going to do, and by borrowing the <a href="https://github.com/objcio/issue-12-interactive-animations-uidynamics/blob/master/Interactive%20UIDynamics/PaneBehavior.m">behavior code</a> from the <a href="http://www.objc.io/issue-12/interactive-animations.html">Interactive Animations</a> article we can build this pretty quickly.  The only thing we need to change is to increase the dynamic item behavior&rsquo;s resistance and the attachment behavior&rsquo;s damping a little bit, like so:</p>
+
+<p>```
+&ndash; (void)setup {</p>
+
+<pre><code>UIAttachmentBehavior *attachmentBehavior = [[UIAttachmentBehavior alloc] initWithItem:self.item attachedToAnchor:CGPointZero];
+attachmentBehavior.frequency = 3.5;
+attachmentBehavior.damping = 0.6; // increased from 0.4
+attachmentBehavior.length = 0;
+[self addChildBehavior:attachmentBehavior];
+self.attachmentBehavior = attachmentBehavior;
+
+UIDynamicItemBehavior *itemBehavior = [[UIDynamicItemBehavior alloc] initWithItems:@[self.item]];
+itemBehavior.density = 100;
+itemBehavior.resistance = 25; // increased from 10
+[self addChildBehavior:itemBehavior];
+self.itemBehavior = itemBehavior;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>We&rsquo;ll setup the dynamic animator back in the <code>startInteractiveTransition:</code> method and use the container view as it&rsquo;s reference:</p>
+
+<p><code>
+self.animator = [[UIDynamicAnimator alloc] initWithReferenceView:container];
+self.animator.delegate = self;
+</code></p>
+
+<p>Then back over in the gesture handler, we need to create the <code>PaneBehavior</code> when the gesture ends (I renamed the class <code>FinishingBehavior</code>)</p>
+
+<p>```
+self.finishingBehavior = [[FinishingBehavior alloc] initWithItem:self.view];
+self.finishingBehavior.targetPoint = finishCenter;</p>
+
+<p>if (!CGPointEqualToPoint(velocity, CGPointZero)) {</p>
+
+<pre><code>self.finishingBehavior.velocity = velocity;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Before we add the behavior to the animator (thus kicking off the dynamic system) we can assign an action block to the behavior which the animator will call on every &ldquo;tick&rdquo; of the system, and use that block to figure out if the view leaves the container view. When the view does leave the container view, we can stop the dynamic system by removing all the behaviors from the animator (this takes care of <strong>Step 3</strong> from above):</p>
+
+<p>```
+__weak typeof(self) weakSelf = self;</p>
+
+<p>self.finishingBehavior.action = ^{</p>
+
+<pre><code>if (!CGRectIntersectsRect(gesture.view.frame, weakSelf.view.frame)) {
+    [weakSelf.animator removeAllBehaviors];
+}
+</code></pre>
+
+<p>};
+```</p>
+
+<p>When all the behaviors are removed from the animator, or the view settles into place in the center of the screen, the <code>dynamicAnimatorDidPause:</code> delegate method will be called (remember we set the delegate on the animator to <code>self</code> when we created it). This is where we&rsquo;ll be cleaning up our transition:</p>
+
+<p>```
+&ndash; (void)dynamicAnimatorDidPause:(UIDynamicAnimator *)animator
+{</p>
+
+<pre><code>[self.animator removeAllBehaviors];
+
+for (UIGestureRecognizer *gesture in [[self.context containerView] gestureRecognizers]) {
+    [gesture.view removeGestureRecognizer:gesture];
+}
+
+[self.context completeTransition:![self.context transitionWasCancelled]];
+</code></pre>
+
+<p>}
+```</p>
+
+<p>That&rsquo;s it! Phew. Grab all the code from <a href="https://gist.github.com/ericallam/42e68408ece4d4863604">this gist</a>.</p>
+
+<h3>Wrap up</h3>
+
+<p>The things I&rsquo;d really like you to takeaway from this post is to push the boundaries of animated transitions by making all transitions interactive, even if they start with an animation.</p>
+
+<p>We are entering into a new world of <a href="https://www.google.co.uk/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CC8QFjAA&amp;url=https%3A%2F%2Fmedium.com%2Fdesign-ux%2F926eb80d64e3&amp;ei=yA5-U_j3F-754QSZ2IGoDg&amp;usg=AFQjCNF4xgasT0ewQBZo1xddy4eElPz84A&amp;sig2=_Kd4UxEGJdz3EGHyx25bpw&amp;bvm=bv.67229260,d.bGE">Transitional Interfaces</a> and so even though this may seem like a lot of work for little benefit, to me it&rsquo;s worth it. And it&rsquo;s not that much code, the entire example project weighs in at just over 400 lines. I&rsquo;ve put it <a href="https://gist.github.com/ericallam/42e68408ece4d4863604">in a gist</a> if you&rsquo;d like to kick the tires.</p>
+
+<p>If you have any questions or feedback (or a better way to do this) please <a href="http://twitter.com/eallam">contact me on twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;m using <code>position</code> here because that is what we are animating. It&rsquo;d work the same way if we were animating any other animatable property, such as <code>backgroundColor</code> or <code>alpha</code>.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Again, if you are animating other animatable properties other than <code>position</code>, you&rsquo;d have to copy those from the presentation layer to the model layer too.<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AFNetworking SSL Pinning with Self-Signed Certificates]]></title>
@@ -464,332 +1249,6 @@ foregroundWindow.hidden = NO;
 <h4>Gotchas</h4>
 
 <p>The demo I built is probably not the end of the story. Check out <a href="http://shaune.com.au/using-multiple-uiwindows-in-ios-applications/">Shaun Ervine&rsquo;s post</a> on using multiple <code>UIWindow</code> instances for some possible issues / gotchas in using this technique.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Breaking Bad with DTrace]]></title>
-    <link href="http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace/"/>
-    <updated>2013-05-31T21:25:00+01:00</updated>
-    <id>http://initwithfunk.com/blog/2013/05/31/breaking-bad-with-dtrace</id>
-    <content type="html"><![CDATA[<p><em>If you have any feedback on this article, please contact me on <a href="http://twitter.com/eallam">twitter</a></em></p>
-
-<p>I&rsquo;ve spent an unwise amount of time recently on a problem that arose when me and my <a href="http://www.codeschool.com">Code School</a> colleagues were developing the challenges for our upcoming <a href="http://www.codeschool.com/paths/ios">course on MapKit</a>. All of the challenges assume that the user has given the app permission to use it&rsquo;s current location, and our <a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests in the simulator wouldn&rsquo;t work unless we could somehow programmatically confirm this alert box:</p>
-
-<p><img src="http://i.imgur.com/te7Spyj.jpg" style="width: 294px;" /></p>
-
-<p><a href="https://github.com/square/KIF%E2%80%8E">KIF</a> tests run in the simulator and are built to a different target, so using private API&rsquo;s isn&rsquo;t a problem (KIF wouldn&rsquo;t work unless it used a ton of private API&rsquo;s). <a href="https://twitter.com/puls">Jim Puls</a> from Square (the makers of KIF) was helpful enough to chime in <a href="https://groups.google.com/d/msg/kif-framework/_MffdyvMizU/hvbM6LJO7woJ">this thread</a> to share how they do it at Square: by <a href="http://darkdust.net/writings/objective-c/method-swizzling">method swizzling</a> the crap out of the <code>CLLocationManager</code> class, replacing <code>startUpdatingLocation</code>, <code>location</code>, and <code>locationServicesEnabled</code> with their own versions so the user location mechanics would be wholesale replaced, thus getting around the permission alert box.</p>
-
-<p>We followed their advice and ended up mocking out <code>CLLocationManager</code> (see how in <a href="https://gist.github.com/rubymaverick/5689235">this gist</a>) and it worked well enough, but I was unsatisfied that we had to mock out the entire location machinery just to get rid of that permissions alert box. It wasn&rsquo;t elegant code.</p>
-
-<p><blockquote><p>&hellip;perfection is finally attained not when there is no longer anything to add, but when there is no longer anything to take away&hellip;</p><footer><strong>Antoine de Saint-Exupéry <a href="http://english.stackexchange.com/questions/38837/where-does-this-translation-of-saint-exuperys-quote-on-design-come-from">http://english.stackexchange.com/questions/38837/where-does-this-translation-of-saint-exuperys-quote-on-design-come-from</a></strong></footer></blockquote></p>
-
-<p>I decided to keep searching for a more elegant solution and I started at what I thought was the most obvious place: <code>UIAlertView</code>.</p>
-
-<h3>Searching for UIAlertView</h3>
-
-<p>If I could find the code where the offending <code>UIAlertView</code> is actually created then I would know which code to mock out and hopefully bypass permissions. To do this, I could have swizzled some <code>UIAlertView</code> init methods or added a <a href="http://developer.apple.com/library/ios/#recipes/xcode_help-breakpoint_navigator/articles/adding_a_symbolic_breakpoint.html">symbolic breakpoint</a> in Xcode, but I had recently come across <a href="https://twitter.com/borkware">Mark Dalymple&rsquo;s</a> excellent three part series on DTrace (<a href="http://blog.bignerdranch.com/1907-hooked-on-dtrace-part-1/">1</a>, <a href="http://blog.bignerdranch.com/1968-hooked-on-dtrace-part-2/">2</a>, and <a href="http://blog.bignerdranch.com/2031-hooked-on-dtrace-part-3/">3</a>), and this seemed like a good opportunity to use it for a worthy real-world problem.</p>
-
-<p>I created a new blank iOS 6.0 project with a single <code>MKMapView</code> that wants to show the current user location (you can <a href="http://courseware.codeschool.com.s3.amazonaws.com/try_ios/TestingCurrentLocation.zip">⬇download the project here</a>). I built and ran the app for the simulator to verify that it brought up the alert box and to create a binary that I would later use in Instruments as a target for a custom DTrace instrument.</p>
-
-<p><img src="http://f.cl.ly/items/0f0U0g3L0u2y1f470g1e/iOS%20Simulator%20Screen%20shot%20Jun%201,%202013%2010.52.56%20AM.png" alt="location alert" /></p>
-
-<p>Instruments is powered by DTrace and by using it it made a couple of things easier, like launching an app in the simulator as it attached DTrace probes and logged the results, as well as a cleaner interface for viewing call stack information. To create custom DTrace probes in Instruments, start by opening Instruments from Xcode:</p>
-
-<p><img src="http://f.cl.ly/items/381E422c0X0m2d1u1i2D/69FkXod.jpg" alt="open instruments" /></p>
-
-<p>And then create a new blank document:</p>
-
-<p><img src="http://f.cl.ly/items/2G2M3i2j0P471n1U1p2a/RJeaV4F.jpg" alt="blank document" /></p>
-
-<p>Use <code>⌘B</code> to build a new instrument, and you should come across this screen:</p>
-
-<p><img src="http://f.cl.ly/items/3s3D2j3y121H3y1e281O/9U3uHBU.jpg" alt="new instrument" /></p>
-
-<p>Which presents a nice interface for creating custom DTrace scripts.  To find all methods (class or instance) called on <code>UIAlertView</code>, I ended up with this:</p>
-
-<p><img src="http://f.cl.ly/items/170M3h0v1q2Z2R2t0F1y/EAj9EjF.jpg" alt="uialertview" /></p>
-
-<p>The part to pay attention to is this group of boxes here:</p>
-
-<p><img src="http://f.cl.ly/items/1Z2z0s0N1i2Y0V0E0324/Image%202013.06.01%2011-10-53%20AM.png" alt="group" /></p>
-
-<p>Next up I needed to the choose the target this instrument would run against</p>
-
-<p><img src="http://f.cl.ly/items/260L3c2v0u2l201Y1r1c/keNunJe.jpg" alt="target" /></p>
-
-<p>You have to pick the executable that was built for the simulator, which you can find in <code>~/Library/Application\ Support/iPhone\ Simulator/6.0/Applications/</code>. In there you might see many directories with randomly generated names:</p>
-
-<p><img src="http://f.cl.ly/items/1F1W220Y2y0C3Q050H47/NxLWCRN.jpg" alt="rando" /></p>
-
-<p>You&rsquo;ll have to dig through the noise to find the executable you want:</p>
-
-<p><img src="http://f.cl.ly/items/0Y2A152N1R1D0N1c2l2Q/CeUjegf.jpg" alt="noise" /></p>
-
-<p>Now all that&rsquo;s left is to hit the record button and hope we can find out where that <code>UIAlertView</code> is being initialized:</p>
-
-<p><video id="eWX4nh-HFXM" class="sublime" width="640" height="360" data-uid="eWX4nh-HFXM" data-youtube-id="eWX4nh-HFXM" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/0Q3L1g1X1t2G1I0n2k1v/UIAlertViewCast1Poster.png">
-</video></p>
-
-<p>As you can see, there were 3 UIAlertView method calls that all came from <code>[UIWindow keyWindow]</code>, and one from a <code>performSelector</code>, but that doesn&rsquo;t help us much.  Let&rsquo;s update that probe to record both the module (in this case the class name), and the name of the method</p>
-
-<p><img src="http://i.imgur.com/VvkCSnX.jpg" alt="adding information" /></p>
-
-<p>Now it&rsquo;s a little easier to see what&rsquo;s going on.  It looks like <code>[UIWindow keyWindow]</code> calls private class method <code>+_alertWindow</code> on <code>UIAlertView</code>.</p>
-
-<p><img src="http://i.imgur.com/JLhoerL.jpg" alt="private" /></p>
-
-<p>Could this be where our location permissions alert box is being created. Fortunately, our instrument&rsquo;s probe automatically records the stack trace information for each of the events recorded.  To view the stack trace information, we just need to select an event and open the right hand side drawer:</p>
-
-<p><img src="http://f.cl.ly/items/1a213E110a453F3G3T25/Image%202013.06.02%2010-25-53%20AM.png" alt="stack trace" /></p>
-
-<p>The stack trace of the <code>_alertWindow</code> calls are all the same, and lead to a dead end. They don&rsquo;t seem to be related to location at all but instead are triggered on normal app startup routines.  The only other hit we got, <code>+_initializeSafeCategory</code>, is related to Accessibility and not location.</p>
-
-<p>This is a dead end.</p>
-
-<p>Well, not exactly.  Using DTrace I was able to eliminate the possibility that the <code>UIAlertView</code> was created inside the TestingCurrentLocation process, which means it has to be created in another process.  So I knew that somehow, my TestingCurrentLocation process was communicating with another outside process which was responsible for location permissions. Apple doesn&rsquo;t want to give app developers the chance of getting around the location permissions box for privacy reasons, so they would want to lock it down in another process.</p>
-
-<h3>The Mystery Process</h3>
-
-<p>So my next goal was to figure out what this mystery outside process was. I knew that my app process and the mystery process had to communicate, which led me to research the <a href="http://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html">XPC Services API</a> which &ldquo;provides a lightweight mechanism for basic interprocess communication integrated with Grand Central Dispatch (GCD) and launchd&rdquo; and is an integral part of <a href="http://developer.apple.com/library/mac/#documentation/Security/Conceptual/AppSandboxDesignGuide/AboutAppSandbox/AboutAppSandbox.html#//apple_ref/doc/uid/TP40011183">App Sandboxing</a>, so it seemed like an interested place to start.  I tried logging all methods called on parts of the Objective-C API, like <code>NSXPCConnection</code>, and <code>NSXPCInterface</code>, but there was nothing there. The next most obvious thing to probe was the c API, specifically the <a href="http://developer.apple.com/library/mac/#documentation/System/Reference/XPC_connection_header_reference/Reference/reference.html#//apple_ref/c/func/xpc_connection_create">xpc_connection_create</a> function. Here is how I created the probe I to log all the calls to <code>xpc_connection_create</code> with the caller and the <code>name</code> of the service with which to connect:</p>
-
-<p><video id="4z7meAsOgAQ" class="sublime" width="640" height="360" data-uid="4z7meAsOgAQ" data-youtube-id="4z7meAsOgAQ" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/113t1y2T07161b3e3a3U/xpc_connection_cast_poster.png">
-</video></p>
-
-<p>As you can see, probing this function turned out to bear some real fruit. It found a call to <code>xpc_connection_create</code> that was creating a connection to something named <code>com.apple.locationd.registration</code> and the call stack confirmed that this being triggered by setting the map to display the users location:</p>
-
-<p><img src="http://f.cl.ly/items/062c1J2g3S0v2x1A0z2c/Image%202013.06.02%2011-33-03%20AM.png" alt="xpc_connection_create results" /></p>
-
-<p>Running <code>sudo ps aux | grep locationd</code> showed that their was indeed a <code>locationd</code> process running in the simulator located at <code>/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec/locationd</code> (there was also one running at <code>/usr/libexec/locationd</code> which is the location daemon for Mac OS X.)</p>
-
-<h3>locationd</h3>
-
-<p>This gave me a new process to probe for information. But what should I look for?  I knew that if a user allowed an app in the simulator to get their location, they wouldn&rsquo;t be asked again even if the simulator was restarted (only by resetting the simulator would the location permissions alert box come up again).  So I knew that there had to be somewhere on the filesystem where locationd was storing the permission authorizations for simulator apps. If I could find this file (most likely a preferences file), I could possibly inject authorization for an app before it ever ran, thus never displaying the alert box even on the apps first run in the simulator.</p>
-
-<p>So how do I find what files the locationd process is opening and reading and writing to? Well, that&rsquo;s where the <code>syscall</code> DTrace provider comes in, which allows you to probe all system calls (like <code>open</code>, <code>read</code>, <code>write</code>, <code>chdir</code>, etc.).  This provider makes it really easy to find out which files a process is opening and writing to by probing the <code>open</code> and <code>write</code> functions.  For example, here is a DTrace script for printing out all the files opened by the <code>locationd</code> process:</p>
-
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>locationopens.d </span></figcaption>
- <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='d'><span class='line'><span class="n">syscall</span><span class="p">::</span><span class="n">open</span><span class="p">*:</span><span class="n">entry</span>
-</span><span class='line'><span class="p">/</span><span class="n">execname</span> <span class="p">==</span> <span class="p">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;/</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>   <span class="n">printf</span><span class="p">(&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span> <span class="n">open</span> <span class="p">%</span><span class="n">s</span><span class="s">\n</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">copyinstr</span><span class="p">(</span><span class="n">arg0</span><span class="p">));</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
-
-<p>This script will trace all system calls to <code>open*</code> (<code>*</code> is a wildcard), but only on processes with the name &ldquo;locationd&rdquo; (the <code>/execname == "locationd"/</code> line defines a predicate for the probe). The code between the curly-braces is the action to perform on each match. Inside the curly-braces we are printing the first argument to <code>open</code>, which is the path of the file (to find out which arguments a system call takes, use <code>man 2 syscall</code> which in this case would be <code>man 2 open</code>).  We have to use <code>copyinstr</code> to copy data from the process into the kernel&rsquo;s address space (where DTrace runs).</p>
-
-<p>Running this with <code>dtrace -s locationopens.d</code> (make sure you have root priviledges: run <code>sudo -i</code> to start a new shell in root) and then running our TestingCurrentLocation app in the simulator results in a couple hundred lines that look like this:</p>
-
-<p>```</p>
-
-<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle</p>
-
-<p>  0    141                       open:entry locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Preferences/.GlobalPreferences.plist</p>
-
-<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj</p>
-
-<p>  0    927              open_nocancel:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/Base.lproj</p>
-
-<p>  0    141                       open:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings</p>
-
-<p>  0    141                       open:entry locationd open /System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.stringsdict</p>
-
-<p>```</p>
-
-<p>We can get rid of some of the noise by running dtrace with the <code>-q</code> option, like so:</p>
-
-<p><code>
-$ dtrace -q -s locationopens.d
-...snip a bunch of lines...
-locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Preferences/com.apple.locationd.plist
-locationd open /System/Library/CoreServices/ServerVersion.plist
-locationd open /System/Library/CoreServices/SystemVersion.plist
-locationd open /System/Library/CoreServices/SystemVersion.bundle
-locationd open /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec
-locationd open /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk/usr/libexec/locationd
-...snip a bunch of lines...
-</code></p>
-
-<p>Okay that&rsquo;s a lot of file opens, and it would take awhile going through every single one looking for clues.  What I really want to know is: what files does locationd <em>write</em> to when a user taps the &ldquo;OK&rdquo; button in the location alert box, and what data does it write? For that we are going to need another DTrace script:</p>
-
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>locationwrites.d </span></figcaption>
- <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='d'><span class='line'><span class="n">syscall</span><span class="p">::</span><span class="n">write</span><span class="p">*:</span><span class="n">entry</span>
-</span><span class='line'><span class="p">/</span><span class="n">execname</span> <span class="p">==</span> <span class="p">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;/</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>   <span class="n">printf</span><span class="p">(&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">locationd</span> <span class="n">write</span> <span class="p">%</span><span class="n">s</span><span class="s">\n\n</span><span class="p">%</span><span class="n">s</span><span class="s">\n\n</span><span class="p">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">fds</span><span class="p">[</span><span class="n">arg0</span><span class="p">].</span><span class="n">fi_pathname</span><span class="p">,</span> <span class="n">copyinstr</span><span class="p">(</span><span class="n">arg1</span><span class="p">));</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
-
-<p>Here we are tracing all calls to <code>write*</code> and printing out the path name using the first argument (arg0) which is a file descriptor (for more on using file descriptors in DTrace, read <a href="http://milek.blogspot.com/2005/07/file-descriptors-in-dtrace.html">this tutorial</a>). We are also printing out the second argument (arg1) which is a buffer of the contents written to the file. Now if we run the script just before we confirm we want to allow this app to use our current location, we will know where locationd is writing to save this information.</p>
-
-<p><video id="X29i348ea4I" class="sublime" width="640" height="360" data-uid="X29i348ea4I" data-youtube-id="X29i348ea4I" data-autoresize="fit" preload="none" poster="http://f.cl.ly/items/2X303t1A1s2C1Z243I0J/locationdwrites_poster.png">
-</video></p>
-
-<p>This results in just one trace match writing to a file at <code>??/locationd/clients.plist</code>. If we run the <code>locationopens.d</code> script again while grepping for <code>clients.plist</code> we can find the full path to this file:</p>
-
-<p><code>
-$ dtrace -q -s locationopens.d | grep 'clients.plist'
-locationd open /Users/eric/Library/Application Support/iPhone Simulator/6.0/Library/Caches/locationd/clients.plist
-</code></p>
-
-<h3>The solution</h3>
-
-<p>When I opened this file for the first time I had to find someone in the office to high-five.  Here it was, the file that tells locationd, and thus apps in the simulator, whether or not the user has permitted use of location information.  I could convert the <code>clients.plist</code> file into xml using <code>plutil -convert xml1 clients.plist</code> and then open it up and see what was inside:</p>
-
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>clients.plist </span></figcaption>
- <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="ni">&amp;lt;</span>?xml version=<span class="ni">&amp;ldquo;</span>1.0<span class="ni">&amp;rdquo;</span> encoding=<span class="ni">&amp;ldquo;</span>UTF-8<span class="ni">&amp;rdquo;</span>?&gt;
-</span><span class='line'><span class="ni">&amp;lt;</span>!DOCTYPE plist PUBLIC <span class="ni">&amp;ldquo;&amp;ndash;</span>//Apple//DTD PLIST 1.0//EN<span class="ni">&amp;rdquo;</span> <span class="ni">&amp;ldquo;</span><span class="nt">&lt;a</span> <span class="na">href=</span><span class="s">&quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;</span><span class="nt">&gt;</span>http://www.apple.com/DTDs/PropertyList-1.0.dtd<span class="nt">&lt;/a&gt;</span><span class="ni">&amp;rdquo;</span>&gt;
-</span><span class='line'><span class="nt">&lt;plist</span> <span class="na">version=</span><span class="s">&quot;1.0&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'><span class="nt">&lt;dict&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;key&gt;</span>com.codeschool.TestingCurrentLocation<span class="nt">&lt;/key&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;dict&gt;&lt;/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nt">&lt;pre&gt;&lt;code&gt;</span><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Authorized<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>true/<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>BundleId<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>com.codeschool.TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Executable<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>/Users/eric/Library/Application Support/iPhone Simulator/6.0/Applications/D2700670-4F2D-4A4B-A881-695E9812CB86/TestingCurrentLocation.app/TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>LocationTimeStopped<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>real<span class="ni">&amp;gt;</span>391883613.42615497<span class="ni">&amp;lt;</span>/real<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Registered<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>string<span class="ni">&amp;gt;</span>/Users/eric/Library/Application Support/iPhone Simulator/6.0/Applications/D2700670-4F2D-4A4B-A881-695E9812CB86/TestingCurrentLocation.app/TestingCurrentLocation<span class="ni">&amp;lt;</span>/string<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>key<span class="ni">&amp;gt;</span>Whitelisted<span class="ni">&amp;lt;</span>/key<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="ni">&amp;lt;</span>false/<span class="ni">&amp;gt;</span>
-</span><span class='line'><span class="nt">&lt;/code&gt;&lt;/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nt">&lt;p&gt;</span>  <span class="nt">&lt;/dict&gt;</span>
-</span><span class='line'><span class="nt">&lt;/dict&gt;</span>
-</span><span class='line'><span class="nt">&lt;/plist&gt;</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
-
-<p>Property List&rsquo;s (.plist) are a strange format but not impossible to read. The real important bit seemed to be the <code>Authorized</code> key which was set to <code>&lt;true/&gt;</code>.  I tried changing that to <code>&lt;false/&gt;</code> and rerunning the app in the simulator and my app no longer had access to location information and also didn&rsquo;t bring up the location permission alert box. If I removed the entire <code>&lt;dict&gt;&lt;/dict&gt;</code> block representing my app, the location permission alert box would show back up the next time I ran the app in the simulator.</p>
-
-<p>I now had full control over that location alert box. All I had to do was write over the <code>clients.plist</code> file with the xml already crafted in a way to give my app access to location information. For our upcoming MapKit course, we&rsquo;re doing it inside our executor server (which is written in ruby), kind of like this:</p>
-
-<p><div class='bogus-wrapper'><notextile><figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">write_out_location_plist_hack!</span>
-</span><span class='line'>  <span class="n">plist</span> <span class="o">=</span> <span class="sx">%{</span>
-</span><span class='line'><span class="sx">&amp;lt;?xml version=&amp;ldquo;1.0&amp;rdquo; encoding=&amp;ldquo;UTF-8&amp;rdquo;?&gt;</span>
-</span><span class='line'><span class="sx">&amp;lt;!DOCTYPE plist PUBLIC &amp;ldquo;&amp;ndash;//Apple//DTD PLIST 1.0//EN&amp;rdquo; &amp;ldquo;&lt;a href=&quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;http://www.apple.com/DTDs/PropertyList-1.0.dtd&lt;/a&gt;&amp;rdquo;&gt;</span>
-</span><span class='line'><span class="sx">&lt;plist version=&quot;1.0&quot;&gt;</span>
-</span><span class='line'><span class="sx">&lt;dict&gt;</span>
-</span><span class='line'><span class="sx">  &lt;key&gt;com.codeschool.</span><span class="si">#{</span><span class="vi">@project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="sx">&lt;/key&gt;</span>
-</span><span class='line'><span class="sx">  &lt;dict&gt;&lt;/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sx">&lt;pre&gt;&lt;code&gt;&amp;lt;key&amp;gt;Authorized&amp;lt;/key&amp;gt;</span>
-</span><span class='line'><span class="sx">&amp;lt;true/&amp;gt;</span>
-</span><span class='line'><span class="sx">&amp;lt;key&amp;gt;BundleId&amp;lt;/key&amp;gt;</span>
-</span><span class='line'><span class="sx">&amp;lt;string&amp;gt;com.codeschool.</span><span class="si">#{</span><span class="vi">@project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="sx">&amp;lt;/string&amp;gt;</span>
-</span><span class='line'><span class="sx">&lt;/code&gt;&lt;/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sx">&lt;p&gt;  &lt;/dict&gt;</span>
-</span><span class='line'><span class="sx">&lt;/dict&gt;</span>
-</span><span class='line'><span class="sx">&lt;/plist&gt;</span>
-</span><span class='line'><span class="sx">}</span><span class="o">.</span><span class="n">strip</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  clients_plist = File.join(&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="no">File</span><span class="o">.</span><span class="n">expand_path</span><span class="p">(</span><span class="s2">&quot;~&quot;</span><span class="p">),</span>
-</span><span class='line'><span class="s2">&quot;Library&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;Application Support&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;iPhone Simulator&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;6.0&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;Library&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;Caches&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;locationd&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="s2">&quot;clients.plist&quot;</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="p">)</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  File.open(clients_plist, &amp;ldquo;w+&amp;rdquo;) do |file|&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">file</span><span class="o">.</span><span class="n">puts</span> <span class="n">plist</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
-
-<p>The code above runs before the app is launched in the simulator, and it works perfectly. We were able to get rid of the nasty <a href="https://gist.github.com/rubymaverick/5689235">CLLocationManager mocking</a> and I was finally able to move on to something more productive.</p>
-
-<p>But trying to solve this problem did lead me to learn a lot more about DTrace. Before, DTrace just seemed like this magical thing used by superhero programmers. Now that I&rsquo;ve used it so solve a real problem, it&rsquo;s not so magical anymore, and I am already starting to think of other problems I could solve using it that I wouldn&rsquo;t have been able to before. I hope that by writing about how I used DTrace to solve this problem, it will lead you to try it out the next time you are stuck on something similar.  If you do, please let me know how you did by getting in touch with me on my <a href="http://twitter.com/eallam">twitter</a>.</p>
 ]]></content>
   </entry>
   

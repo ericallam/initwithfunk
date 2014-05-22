@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2014-03-19T11:44:45+00:00</updated>
+  <updated>2014-05-22T16:47:31+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,1057 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Interactive Animated Transitions on iOS]]></title>
+    <link href="http://initwithfunk.com/blog/2014/05/22/interactive-animated-transitions-on-ios/"/>
+    <updated>2014-05-22T15:59:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2014/05/22/interactive-animated-transitions-on-ios</id>
+    <content type="html"><![CDATA[<p>I closed <a href="https://speakerdeck.com/rubymaverick/uikonf-2014-building-better-transition">my talk at UIKonf</a> by talking about a technique to build better animated transitions on iOS by making them &ldquo;always interactive&rdquo;. The user should be able to interrupt an animated transition with a gesture, cancelling it any time they want. By default animated transitions will wrap the entire transition in <code>[UIApplication beginIgnoringInteractionEvents]</code>, effectively blocking all interaction during the duration of the transition. It&rsquo;s treated almost like a rotation event, which exhibits the same blocking behavior.</p>
+
+<p>It should work like this:</p>
+
+<p><img src='http://cl.ly/image/2t3r0S0n0R1J/FirstInteractiveAnimatedTransition.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The technique I&rsquo;ve been using is to just turn an animated transition into an interactive transition.</p>
+
+<p>Interactive transitions are supported by the transition system, it&rsquo;s just that they usually start with a continuous gesture, like a pinch or a screen edge pan. That gesture kicks off the transition (be it a navigation controller push/pop or a modal present/dismiss), and then once the gesture ends, the relevant views are animated into place (or off screen, whichever makes sense for that specific transition).</p>
+
+<p>And since interactive transitions don&rsquo;t block interaction (of course), then we should be able to use them to make always interactive animated transitions.</p>
+
+<p>The only difference is that the interactive transition starts with an animation, not a gesture.</p>
+
+<p>At a high level, the difference between an normal interactive transition and an interactive animated transition looks like this:</p>
+
+<p><img src='http://cl.ly/image/0P07303v3z0i/Interactive%20Animations.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p><img src='http://cl.ly/image/0d0z2C422r2y/Interactive%20Animations%20After.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>Of course it&rsquo;s a bit more complicated than the above illustration, and I touched on some of that complexity in my talk. The rest of this post will be a more detailed examination of how to implement these strange hybrid transitions.</p>
+
+<h3>Converting the Animated Transition</h3>
+
+<p>If you already have an animated transition, you&rsquo;ve had to implement these two methods of the transitioning delegate:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">animationControllerForPresentedController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">presented</span>
+</span><span class='line'>                         <span class="nf">presentingController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">presenting</span>
+</span><span class='line'>                             <span class="nf">sourceController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">source</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">animationControllerForDismissedController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">dismissed</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The object you return from these methods conform to the <code>UIViewControllerAnimatedTransitioning</code> protocol, and are responsible for defining exactly how an animated transition works by implementing the <code>transitionDuration:</code> and <code>animateTransition:</code> methods. The transition system will call these methods after you&rsquo;ve kicked off a transition, and you can return <code>nil</code> to tell the system to just use it&rsquo;s (the transition system&rsquo;s) default transition.</p>
+
+<p>To convert an animated transition into an interactive one you will also need to implement the &ldquo;interaction&rdquo; equivalent of these methods:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">interactionControllerForPresentation:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">animator</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">interactionControllerForDismissal:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">animator</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If these methods aren&rsquo;t implemented (or you return <code>nil</code>) then the transition system falls back to the animated transition and blocks interaction during the transition, which we want to avoid.</p>
+
+<p>To turn on interactivity then all we need to do is implement these methods and return an object that conforms to the <code>UIViewControllerInteractiveTransitioning</code> protocol, which only has one required method: <code>startInteractiveTransition:</code>.</p>
+
+<p>So let&rsquo;s say we already have an animated transition that looks like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">@interface</span> <span class="nc">CustomAnimatedTransition</span> : <span class="nc">NSObject</span> <span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span>
+</span><span class='line'><span class="k">@property</span> <span class="p">(</span><span class="n">assign</span><span class="p">,</span> <span class="n">nonatomic</span><span class="p">)</span> <span class="kt">BOOL</span> <span class="n">reversed</span><span class="p">;</span>
+</span><span class='line'><span class="k">@end</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@implementation</span> <span class="nc">CustomAnimatedTransition</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="n">instancetype</span><span class="p">)</span><span class="nf">init</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">self</span> <span class="o">=</span> <span class="p">[</span><span class="n">super</span> <span class="n">init</span><span class="p">]){</span>
+</span><span class='line'>        <span class="n">_reversed</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">self</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="n">NSTimeInterval</span><span class="p">)</span><span class="nf">transitionDuration:</span><span class="p">(</span><span class="kt">id</span><span class="p">)</span><span class="nv">context</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mf">0.35</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">animateTransition:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerContextTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">context</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">toView</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span>
+</span><span class='line'>                        <span class="nl">viewControllerForKey:</span><span class="n">UITransitionContextToViewControllerKey</span><span class="p">].</span><span class="n">view</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">fromView</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span>
+</span><span class='line'>                        <span class="nl">viewControllerForKey:</span><span class="n">UITransitionContextFromViewControllerKey</span><span class="p">].</span><span class="n">view</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">container</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span> <span class="n">containerView</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSTimeInterval</span> <span class="n">duration</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="nl">transitionDuration:</span><span class="n">context</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">toView</span><span class="p">.</span><span class="n">bounds</span> <span class="o">=</span> <span class="n">CGRectMake</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">180</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">CGPointMake</span><span class="p">(</span><span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">90</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>            <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">){</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>            <span class="n">fromView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">CGRectMake</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">180</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">){</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And our transitioning delegate looks like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">animationControllerForPresentedController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">presented</span>
+</span><span class='line'>                         <span class="nf">presentingController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">presenting</span>
+</span><span class='line'>                             <span class="nf">sourceController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">source</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">CustomAnimatedTransition</span><span class="p">.</span><span class="n">new</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">animationControllerForDismissedController:</span><span class="p">(</span><span class="n">UIViewController</span> <span class="o">*</span><span class="p">)</span><span class="nv">dismissed</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">({</span>
+</span><span class='line'>        <span class="n">CustomAnimatedTransition</span> <span class="o">*</span><span class="n">transition</span> <span class="o">=</span> <span class="n">CustomAnimatedTransition</span><span class="p">.</span><span class="n">new</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">transition</span><span class="p">.</span><span class="n">reversed</span> <span class="o">=</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">transition</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice how we implement both &ldquo;sides&rdquo; of the modal transition by using that <code>reversed</code> property. This is a fairly common technique since it&rsquo;s a good practice to have symmetrical transitions (where each side of the transition is a mirror of the other).</p>
+
+<p>To make it an interactive transition all we have to do is make this class conform to the <code>UIViewControllerInteractiveTransitioning</code> protocol and move our animation code from <code>animateTransition:</code> into <code>startInteractiveTransition:</code>, like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">@interface</span> <span class="nc">CustomAnimatedTransition</span> : <span class="nc">NSObject</span>
+</span><span class='line'>                            <span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="p">,</span>
+</span><span class='line'>                                <span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@property</span> <span class="p">(</span><span class="n">assign</span><span class="p">,</span> <span class="n">nonatomic</span><span class="p">)</span> <span class="kt">BOOL</span> <span class="n">reversed</span><span class="p">;</span>
+</span><span class='line'><span class="k">@end</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@implementation</span> <span class="nc">CustomAnimatedTransition</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="n">instancetype</span><span class="p">)</span><span class="nf">init</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">self</span> <span class="o">=</span> <span class="p">[</span><span class="n">super</span> <span class="n">init</span><span class="p">]){</span>
+</span><span class='line'>        <span class="n">_reversed</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">self</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="n">NSTimeInterval</span><span class="p">)</span><span class="nf">transitionDuration:</span><span class="p">(</span><span class="kt">id</span><span class="p">)</span><span class="nv">context</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mf">0.35</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">startInteractiveTransition:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerContextTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">context</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">toView</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span>
+</span><span class='line'>                        <span class="nl">viewControllerForKey:</span><span class="n">UITransitionContextToViewControllerKey</span><span class="p">].</span><span class="n">view</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">fromView</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span>
+</span><span class='line'>                        <span class="nl">viewControllerForKey:</span><span class="n">UITransitionContextFromViewControllerKey</span><span class="p">].</span><span class="n">view</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">UIView</span> <span class="o">*</span><span class="n">container</span> <span class="o">=</span> <span class="p">[</span><span class="n">context</span> <span class="n">containerView</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">NSTimeInterval</span> <span class="n">duration</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="nl">transitionDuration:</span><span class="n">context</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">toView</span><span class="p">.</span><span class="n">bounds</span> <span class="o">=</span> <span class="n">CGRectMake</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">180</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">CGPointMake</span><span class="p">(</span><span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">90</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>            <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">){</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>            <span class="n">fromView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">CGRectMake</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">280</span><span class="p">,</span> <span class="mi">180</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">){</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">animateTransition:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerContextTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">context</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">@end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The only other change in the <code>startInteractiveTransition:</code> method is the call to <code>finishInteractiveTransition</code> in the completion of the animation.</p>
+
+<p>Then, in the transitioning delegate, we can return the <code>animator</code> object passed into the interactive delegate methods (casting it to tell the compiler that this object conforms to the required <code>UIViewControllerInteractiveTransitioning</code> protocol):</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">interactionControllerForPresentation:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">animator</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="n">animator</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span>
+</span><span class='line'>    <span class="nf">interactionControllerForDismissal:</span><span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerAnimatedTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="nv">animator</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">(</span><span class="kt">id</span><span class="o">&lt;</span><span class="n">UIViewControllerInteractiveTransitioning</span><span class="o">&gt;</span><span class="p">)</span><span class="n">animator</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>At this point we have a working transition with an animation, but instead of blocking all interaction, keeps the door open for a gesture to take control of the transition at any time. Before adding a gesture recognizer to handle that case, we first need to fix a bug that will occur if we were to try and use this code in a navigation controller transition. You can see that bug in action here:</p>
+
+<p><img src='http://cl.ly/image/3r2t0f2T193j/BadNavigationUpdates.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The navbar crossfade animation is delayed until after the animation finishes, instead of happening at the same time. Compare to how it should look:</p>
+
+<p><img src='http://cl.ly/image/1C0V1M2l1v3j/GoodNavigationBar.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<h3>Fixing the navbar bug</h3>
+
+<p>The transition system tries its hardest to animate the navbar along with a custom transition. With an animated transition, it knows the duration of the animation and so just tells the navbar <em>animate your crossfade using a duration of X seconds</em>. But with an interactive transition, there is no duration (the user could pan for an arbitrary amount of time).</p>
+
+<p>If there is no duration, then how could the navbar animation possibly work? Interactive transitions have a concept known as <em>completion percentage</em>. This is a number between 0.0 and 1.0 that is supposed to signify how far along the interactive transition is in it&rsquo;s own conception of &ldquo;far along&rdquo;. For example, if the interactive transition was driven be a pan gesture, from left to right, then the further to the right the user moves their pan, the further along the transition is and the closer to 1.0 it&rsquo;s <em>completion percentage</em> becomes.</p>
+
+<p><img src='http://cl.ly/image/0J1z2q3T140U/Percent%20Complete.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The transition&rsquo;s completion percentage is updated by calling the <code>updateInteractiveTransition:</code> method on the context, passing in a value between <code>0.0</code> and <code>1.0</code>.</p>
+
+<p>The transition can use this completion percentage value to manually drive the navbar animation by using features of the <code>CAMediaTiming</code> protocol. <a href="http://twitter.com/davidronnqvist">David Rönnqvist</a> has a great writeup on implementing this technique in his <a href="http://ronnqvi.st/controlling-animation-timing/">Controlling Animation Timing</a> post.</p>
+
+<p>The transition system sets the navbar layer&rsquo;s <code>speed</code> to <code>0</code>, effectively pausing it&rsquo;s animation, and then uses the completion percentage to set the <code>timeOffset</code> of the layer to &ldquo;scrub&rdquo; through the animation.</p>
+
+<p>Knowing that we need to update the completion percentage to fix the navbar bug, how do we go about doing that for our interactive animated transition, especially during the initial animation?</p>
+
+<p>The best way I&rsquo;ve found to do this is to use a <code>CADisplayLink</code>, which is like an <code>NSTimer</code> but synchronized to the refresh rate of the display. This class is usually used to drive a custom animation system (see this <a href="http://www.objc.io/issue-12/interactive-animations.html">objc.io article</a> for an example) but we are instead going to use it to calculate the completion percentage during the initial animation based on the animation&rsquo;s duration, using this formula:</p>
+
+<blockquote><p>percentComplete = elapsedTime / animationDuration;</p></blockquote>
+
+<p>This should run only during the initial animation so we&rsquo;ll setup the display link right before the animation code, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">startingTime</span> <span class="o">=</span> <span class="n">CACurrentMediaTime</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">displayLink</span> <span class="o">=</span> <span class="p">[</span><span class="n">CADisplayLink</span> <span class="nl">displayLinkWithTarget:</span><span class="n">self</span> <span class="nl">selector:</span><span class="k">@selector</span><span class="p">(</span><span class="nl">tick:</span><span class="p">)];</span>
+</span><span class='line'><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">displayLink</span> <span class="nl">addToRunLoop:</span><span class="p">[</span><span class="n">NSRunLoop</span> <span class="n">mainRunLoop</span><span class="p">]</span> <span class="nl">forMode:</span><span class="n">NSRunLoopCommonModes</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>After adding it to the <code>mainRunLoop</code>, the display link will start calling the <code>tick:</code> method 60 times per second, but before that we record the <code>CACurrentMediaTime()</code> which we&rsquo;ll use to calculate the <code>elapsedTime</code>.  The <code>tick:</code> method looks like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">tick:</span><span class="p">(</span><span class="n">CADisplayLink</span> <span class="o">*</span><span class="p">)</span><span class="nv">link</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSTimeInterval</span> <span class="n">elapedTime</span> <span class="o">=</span> <span class="n">link</span><span class="p">.</span><span class="n">timestamp</span> <span class="o">-</span> <span class="n">self</span><span class="p">.</span><span class="n">startingTime</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">NSTimeInterval</span> <span class="n">duration</span> <span class="o">=</span> <span class="mf">0.35</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">CGFloat</span> <span class="n">percentComplete</span> <span class="o">=</span> <span class="n">MIN</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">elapedTime</span> <span class="o">/</span> <span class="n">duration</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="nl">updateInteractiveTransition:</span><span class="n">percentComplete</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Using the display link&rsquo;s current <code>timestamp</code> and that <code>startingTime</code> we stashed away we can calculate the elapsed time (in seconds) and then calculate the completion percentage (capping it at <code>1.0</code>).</p>
+
+<p>When the animation finishes, the display link needs to be stopped (so it doesn&rsquo;t continue calling <code>tick:</code> until the end of time) so we need to invalidate it, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>            <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">){</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">displayLink</span> <span class="n">invalidate</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Introducing Interaction</h2>
+
+<p>We&rsquo;ve built the foundation for an interactive animated transition so now we can add the actual interaction bits. For this example, I&rsquo;m going to cover how to use a pan gesture recognizer to create this interaction effect:</p>
+
+<p><img src='http://cl.ly/image/2t3r0S0n0R1J/FirstInteractiveAnimatedTransition.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>During the presentation or dismissal of the modal view controller the user can interrupt the transition by panning inside the modal view, deciding either to finish or cancel the transition.</p>
+
+<p>If you&rsquo;ve ever tried to add interaction to a view that is animating you know that it doesn&rsquo;t work the same as a view at rest. That&rsquo;s because of the <strong>Model vs Presentation</strong> problem. A lot has been written about this problem and how to deal with it (including the aforementioned article on <a href="http://www.objc.io/issue-12/interactive-animations.html">interactive animations in objc.io</a>).</p>
+
+<p>The gist of the problem is that during an animation, the values of the properties being animated aren&rsquo;t their current values as shown on screen, but instead are the values those properties will become once the animation reaches completion.  An illustration of the problem:</p>
+
+<p><img src='http://cl.ly/image/0g24120n1E2V/Presentation%20vs%20Model.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>So the view only ever thinks it&rsquo;s in either the beginning location (before the animation has begun) or the ending location (once the animation finishes), but never any point inbetween while the animation is running. This is why a hit test on a view in the middle of an animation doesn&rsquo;t work as you&rsquo;d expect.</p>
+
+<p>Fortunately, you can get access to a view&rsquo;s <em>presentation</em> properties, which does reflect the property values as they are currently seen on screen, using the <code>presentation</code> property on the view&rsquo;s layer:</p>
+
+<p><img src='http://cl.ly/image/3e2h1C423k1E/Presentation%20vs%20Model%202.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>To add our pan gesture recognizer and have it only recognize when the pan happens inside of our modal view, we need to do a little extra work. First, we create it and add it to the transition&rsquo;s container view, setting our <code>CustomAnimatedTransition</code> object as the target:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UIPanGestureRecognizer</span> <span class="o">*</span><span class="n">gesture</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIPanGestureRecognizer</span> <span class="n">alloc</span><span class="p">]</span>
+</span><span class='line'>                                    <span class="nl">initWithTarget:</span><span class="n">self</span>
+</span><span class='line'>                                            <span class="nl">action:</span><span class="k">@selector</span><span class="p">(</span><span class="nl">didPan:</span><span class="p">)];</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">[</span><span class="n">container</span> <span class="nl">addGestureRecognizer:</span><span class="n">gesture</span><span class="p">];</span>
+</span><span class='line'><span class="n">gesture</span><span class="p">.</span><span class="n">delegate</span> <span class="o">=</span> <span class="n">self</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will match any pan inside the container view, so we have our <code>CustomAnimatedTransition</code> object also become the delegate of the gesture and implement the method <code>- (BOOL)gestureRecognizerShouldBegin:</code>, like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">gestureRecognizerShouldBegin:</span><span class="p">(</span><span class="n">UIGestureRecognizer</span> <span class="o">*</span><span class="p">)</span><span class="nv">gesture</span><span class="p">;</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">location</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">locationInView:</span><span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">CALayer</span> <span class="o">*</span><span class="n">presentationLayer</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">layer</span><span class="p">.</span><span class="n">presentationLayer</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">([</span><span class="n">presentationLayer</span> <span class="nl">hitTest:</span><span class="n">location</span><span class="p">])</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This method gives us the ability to decide whether a the gesture should begin before that recognizer&rsquo;s handler method is called. We use the location of the touch in the container view to do a hit test on the view&rsquo;s presentation layer, indicating that the gesture system should proceed if the touch is on the presentation layer.</p>
+
+<blockquote><p><strong>Note</strong> Not shown above are the definitions of the two properties <code>context</code> and <code>view</code> on the <code>CustomAnimatedTransition</code> class. <code>context</code> is the parameter passed into <code>startInteractiveTransition:</code> saved to a <code>weak</code> property for use in the gesture recognizer delegate and target/action methods. <code>view</code> is either the &ldquo;from&rdquo; or &ldquo;to&rdquo; view, depending on whether this is a pop/push, or presenting/dismiss. In either case, <code>view</code> always belongs to the view controller on top of the transition. For example, in a dismiss transition, <code>view</code> would be the &ldquo;from&rdquo; view controller&rsquo;s view.</p></blockquote>
+
+<p>Before we move on to implementing the gesture handler we need one more tweak to our existing code to get it to work. We need to ensure that our animation allows user interaction by including the <code>UIViewAnimationOptionAllowUserInteraction</code> option, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span>
+</span><span class='line'>                      <span class="nl">delay:</span><span class="mi">0</span>
+</span><span class='line'>                    <span class="nl">options:</span><span class="n">UIViewAnimationOptionAllowUserInteraction</span>
+</span><span class='line'>                    <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span> <span class="nl">removeGestureRecognizer:</span><span class="n">gesture</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">displayLink</span> <span class="n">invalidate</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice also that we remove the gesture once the animation has finished.</p>
+
+<h3>The Gesture Begins</h3>
+
+<p>Time to implement the gesture handler <code>didPan:</code> method. Since we are working with a continuous gesture, <code>didPan:</code> will get called multiple times and we will be performing different actions depending on the gesture&rsquo;s state. Our first job is to handle the initial state, <code>UIGestureRecognizerStateBegan</code> and cancel all animations, allowing the user&rsquo;s gesture to take over control of the transition and the position of the view.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">didPan:</span><span class="p">(</span><span class="n">UIPanGestureRecognizer</span> <span class="o">*</span><span class="p">)</span><span class="nv">gesture</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">UIGestureRecognizerStateBegan</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">layer</span> <span class="n">removeAllAnimations</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As soon as the animations are removed from the presented/dismisses/pushed/popped view like the code above, then the view will jump to it&rsquo;s final location, not merely stopping in it&rsquo;s tracks in the current location. This is because of that <strong>Model vs Presentation</strong> problem I described above: once those animations are no longer driving the presentation, the view assumes the position of it&rsquo;s model layer, which as we now know is the view&rsquo;s final position<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>So to prevent the jumping behavior, we again have to use the presentation layer. This time we use the position of the presentation layer to set the position<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup> of the model layer before removing the animations:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">didPan:</span><span class="p">(</span><span class="n">UIPanGestureRecognizer</span> <span class="o">*</span><span class="p">)</span><span class="nv">gesture</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">UIGestureRecognizerStateBegan</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">CALayer</span> <span class="o">*</span><span class="n">layer</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">layer</span><span class="p">.</span><span class="n">presentationLayer</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">layer</span><span class="p">.</span><span class="n">position</span> <span class="o">=</span> <span class="n">layer</span><span class="p">.</span><span class="n">position</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">layer</span> <span class="n">removeAllAnimations</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">self</span><span class="p">.</span><span class="n">initialViewCenter</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<blockquote><p><strong>Note</strong> We&rsquo;re stashing off the view&rsquo;s center CGPoint to use later as the gesture changes</p></blockquote>
+
+<p>Have you ever wondered what that <code>BOOL finished</code> parameter in animation completion blocks was useful for? Well wonder no more because there is finally a purpose for it! When animations are removed using <code>removeAllAnimations</code>, the animation completion block will be called and the <code>finished</code> param will be set to <code>NO</code>. We need to use this to conditionally complete the transition or our gesture and transition will be short-circuited as soon as we remove the animations:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="n">duration</span>
+</span><span class='line'>                      <span class="nl">delay:</span><span class="mi">0</span>
+</span><span class='line'>                    <span class="nl">options:</span><span class="n">UIViewAnimationOptionAllowUserInteraction</span>
+</span><span class='line'>                    <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="n">toView</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">container</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">displayLink</span> <span class="n">invalidate</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="p">(</span><span class="n">finished</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="p">[</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span> <span class="nl">removeGestureRecognizer:</span><span class="n">gesture</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>                <span class="p">[</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'>                <span class="p">[</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="n">YES</span><span class="p">];</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We can invalidate the display link either way because it was only for driving the completion percentage while the initial animation was running.</p>
+
+<h3>The Gesture Changes</h3>
+
+<p>We want the view to follow the users touch as they pan around the screen. As the location of the pan gesture changes the <code>didPan:</code> method will be called and the gesture&rsquo;s state will be <code>UIGestureRecognizerStateChanged</code>. We&rsquo;ll use a fairly common technique to achieve this effect:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">UIGestureRecognizerStateChanged</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">translation</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">translationInView:</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">centerTranslated</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">initialViewCenter</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">centerTranslated</span><span class="p">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">translation</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">centerTranslated</span><span class="p">.</span><span class="n">y</span> <span class="o">+=</span> <span class="n">translation</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">centerTranslated</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>translationInView:</code> returns a point that represents how much the location of the pan has changed since the start of the gesture, so all we have to do is combine the <code>initialViewCenter</code> we stashed away at the beginning of the gesture with the translation to set the view&rsquo;s new center position.</p>
+
+<p><img src='http://cl.ly/image/3Y3R1Q1T0I3z/Translation.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>It might be tempting to save yourself from creating the <code>initialViewCenter</code> property and just resetting the translation back to <code>CGPointZero</code> after every change, but don&rsquo;t do it. Resetting the translation to zero will muck with the finishing velocity of the gesture, which we&rsquo;ll need to create a smooth continous finishing animation. As the docs for <code>setTranslation:inView:</code> pretty clearly state: <em>Changing the translation value resets the velocity of the pan</em></p>
+
+<p>The display link has been invalidated but we still need to update the completion percentage as the user pans around the screen, based on the location of the touch.  As the location moves along the y axis we&rsquo;ll update the percentage based on the distance from it&rsquo;s starting and final locations, like so:</p>
+
+<p><img src='http://cl.ly/image/1U0w1t250h1R/Pan%20Change%20Percentage.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>So we need to do this calculate for every change in the gesture.  Something like this will do:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">CGFloat</span> <span class="n">centerY</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+</span><span class='line'><span class="n">CGFloat</span> <span class="n">percentComplete</span> <span class="o">=</span> <span class="n">MAX</span><span class="p">(</span><span class="n">MIN</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">y</span> <span class="o">/</span> <span class="n">centerY</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="n">percentComplete</span> <span class="o">=</span> <span class="mf">1.0f</span> <span class="o">-</span> <span class="n">percentComplete</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="nl">updateInteractiveTransition:</span><span class="n">percentComplete</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>The Gesture Ends</h3>
+
+<p>Now might be a good time to make a fresh cup of coffee. Check Twitter. Play some <a href="http://asherv.com/threes/">Threes</a>. Because even though we have come to the end of our pan gesture, we&rsquo;ve still got a lot of work to do. We&rsquo;ve got to:</p>
+
+<ol>
+<li>Decide whether the transition should finish or be cancelled</li>
+<li>Create a smooth continous-from-the-gesture animation</li>
+<li>Complete the transition as soon as the view is offscreen</li>
+<li>Deal with both the forward and reverse cases.</li>
+</ol>
+
+
+<p>Let&rsquo;s get started :)</p>
+
+<h3>Deciding to finish or cancel</h3>
+
+<p>Before the gesture ends, the transition is in limbo. The user can decide either to finish the transition, or to cancel it. So we have to glean the meaning of the gesture that hopefully corresponds to the users assumptions about how it should work. Most tutorials I&rsquo;ve read on interactive transitions (even the ones <a href="https://www.codeschool.com/courses/core-ios-7">I&rsquo;ve made</a>) just use the location of the gesture to make the decision. Something like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">UIGestureRecognizerStateEnded</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">location</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">locationInView:</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">shouldFinish</span> <span class="o">=</span> <span class="n">location</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="mi">160</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">shouldFinish</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// ...</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// ...</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>They pick a reasonable threshold value (<code>160</code>) and depending on the which side the location falls on. This is the naive approach. Instead, we should consider first the velocity of the gesture. If the user is swiping up, but lifts their touch in the middle of the screen, the view should continue along it&rsquo;s velocity and animate up off screen. Subsequently, if the user&rsquo;s finger is towards the top of the screen, but swiping down, when they let go the view it should continue towards the center. If we&rsquo;d have just used location then the opposite would have happened in both cases.</p>
+
+<p>If the velocity of the gesture is too low, indicating the user isn&rsquo;t swiping much in any direction, then we can fallback on the location to make our decision. That could look something like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">UIGestureRecognizerStateEnded</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">location</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">locationInView:</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">velocity</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">velocityInView:</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'>    <span class="n">CGPoint</span> <span class="n">location</span> <span class="o">=</span> <span class="p">[</span><span class="n">gesture</span> <span class="nl">locationInView:</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">CGFloat</span> <span class="n">kTransitionGestureVelocityThreshold</span> <span class="o">=</span> <span class="mf">50.0f</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">CGFloat</span> <span class="n">kTransitionGestureLocationThreshold</span> <span class="o">=</span> <span class="mf">284.0f</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">shouldFinish</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">ABS</span><span class="p">(</span><span class="n">velocity</span><span class="p">.</span><span class="n">y</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">kTransitionGestureVelocityThreshold</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">shouldFinish</span> <span class="o">=</span> <span class="n">velocity</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">shouldFinish</span> <span class="o">=</span> <span class="n">location</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="n">kTransitionGestureLocationThreshold</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="n">shouldFinish</span> <span class="o">=</span> <span class="o">!</span><span class="n">shouldFinish</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&rsquo;s take this piece-by-piece:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">ABS</span><span class="p">(</span><span class="n">velocity</span><span class="p">.</span><span class="n">y</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">kTransitionGestureVelocityThreshold</span><span class="p">)</span> <span class="p">{</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If the absolute value of the velocity in the y direction is more than some reasonable threshold (I picked <code>50</code>), then velocity is enough to decide whether the transition should finish or cancel.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">shouldFinish</span> <span class="o">=</span> <span class="n">velocity</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If the <code>y</code> velocity is greater than 0 (which indicates the touches are traveling <em>down</em> the screen since the coordinate system starts in the top left) then the transition should finish.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">shouldFinish</span> <span class="o">=</span> <span class="n">location</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="n">kTransitionGestureLocationThreshold</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If the velocity isn&rsquo;t large enough to decide the outcome, then fallback on the location. If the <code>y</code> location is over some threshold, then the transition should finish.</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="n">shouldFinish</span> <span class="o">=</span> <span class="o">!</span><span class="n">shouldFinish</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If the transition is running in reverse, then simply reverse the decision.</p>
+
+<p>Now that we&rsquo;ve made our decision, we have to let the transition system know that we&rsquo;re either finishing or cancelling the transition, and we can do that like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">shouldFinish</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="n">finishInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="n">cancelInteractiveTransition</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This doesn&rsquo;t do much for a modal transition, but for a navigation transition you want to make sure you remember to call these methods because the transition system will proceed to either finish the nav bar animation or reverse it.</p>
+
+<h3>Creating a smooth final animation</h3>
+
+<p>It&rsquo;s time to animate the view to it&rsquo;s final position.  First we need to determine where to animate the view to, either back off the top of the screen or to the center:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">CGPoint</span> <span class="n">finishCenter</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">shouldFinish</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">finishCenter</span> <span class="o">=</span> <span class="n">CGPointMake</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">100</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="n">finishCenter</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">reversed</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">finishCenter</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">.</span><span class="n">center</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="n">finishCenter</span> <span class="o">=</span> <span class="n">CGPointMake</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">context</span><span class="p">.</span><span class="n">containerView</span><span class="p">.</span><span class="n">center</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">100</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then we can perform the final animation, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">UIView</span> <span class="nl">animateWithDuration:</span><span class="mf">0.3</span> <span class="nl">animations:</span><span class="o">^</span><span class="p">{</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">finishCenter</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="nl">completion:</span><span class="o">^</span><span class="p">(</span><span class="kt">BOOL</span> <span class="n">finished</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span> <span class="nl">removeGestureRecognizer:</span><span class="n">gesture</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="o">!</span><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="n">transitionWasCancelled</span><span class="p">]];</span>
+</span><span class='line'><span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Even though at this point we have a working interactive animated transition, something doesn&rsquo;t exactly feel right with that finishing animation. Take a look:</p>
+
+<p><img src='http://cl.ly/image/0X3v1b003w3g/NotExactlySmoothRight.gif' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>The animation isn&rsquo;t continuing from the velocity of the gesture, creating a feeling like we are pushing the view through goop. Unfortunately, animations driven by Core Animation aren&rsquo;t able to take initial velocity into consideration, but we have some options:</p>
+
+<ol>
+<li>UIKit Dynamics</li>
+<li>Facebook POP</li>
+<li>Custom Animations using <code>CADisplayLink</code></li>
+</ol>
+
+
+<p>These options are all thoroughly covered in the <a href="http://www.objc.io/issue-12/interactive-animations.html">Interactive Animations</a> article on <a href="http://www.objc.io">objc.io</a> that you should really check out.</p>
+
+<p>Even though Facebook&rsquo;s POP was built with this exact kind of use-case in mind, I actually rather like using UIKit Dynamics for this sort of thing. In their <a href="https://www.youtube.com/watch?v=g4eaZN2Gnsc&amp;list=PLb0IAmt7-GS2sh8saWW4z8x2vo7puwgnR&amp;index=4">tech talk</a> introducing POP to the world UIKit Dynamics is dismissed because it&rsquo;s &ldquo;hard to use it in a one off situation&rdquo; and you&rsquo;d have to change all your apps animations to use dynamics instead. I don&rsquo;t think that is the case. UIKit Dynamics can very easily be used in one-off situations like this, for when you need to &ldquo;animate&rdquo; a view following a gesture.</p>
+
+<p>So that&rsquo;s what we are going to do, and by borrowing the <a href="https://github.com/objcio/issue-12-interactive-animations-uidynamics/blob/master/Interactive%20UIDynamics/PaneBehavior.m">behavior code</a> from the <a href="http://www.objc.io/issue-12/interactive-animations.html">Interactive Animations</a> article we can build this pretty quickly.  The only thing we need to change is to increase the dynamic item behavior&rsquo;s resistance and the attachment behavior&rsquo;s damping a little bit, like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">setup</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">UIAttachmentBehavior</span> <span class="o">*</span><span class="n">attachmentBehavior</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIAttachmentBehavior</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithItem:</span><span class="n">self</span><span class="p">.</span><span class="n">item</span> <span class="nl">attachedToAnchor:</span><span class="n">CGPointZero</span><span class="p">];</span>
+</span><span class='line'>    <span class="n">attachmentBehavior</span><span class="p">.</span><span class="n">frequency</span> <span class="o">=</span> <span class="mf">3.5</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">attachmentBehavior</span><span class="p">.</span><span class="n">damping</span> <span class="o">=</span> <span class="mf">0.6</span><span class="p">;</span> <span class="c1">// increased from 0.4</span>
+</span><span class='line'>    <span class="n">attachmentBehavior</span><span class="p">.</span><span class="n">length</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span> <span class="nl">addChildBehavior:</span><span class="n">attachmentBehavior</span><span class="p">];</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">attachmentBehavior</span> <span class="o">=</span> <span class="n">attachmentBehavior</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">UIDynamicItemBehavior</span> <span class="o">*</span><span class="n">itemBehavior</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIDynamicItemBehavior</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithItems:</span><span class="err">@</span><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">item</span><span class="p">]];</span>
+</span><span class='line'>    <span class="n">itemBehavior</span><span class="p">.</span><span class="n">density</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">itemBehavior</span><span class="p">.</span><span class="n">resistance</span> <span class="o">=</span> <span class="mi">25</span><span class="p">;</span> <span class="c1">// increased from 10</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span> <span class="nl">addChildBehavior:</span><span class="n">itemBehavior</span><span class="p">];</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">itemBehavior</span> <span class="o">=</span> <span class="n">itemBehavior</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We&rsquo;ll setup the dynamic animator back in the <code>startInteractiveTransition:</code> method and use the container view as it&rsquo;s reference:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">animator</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIDynamicAnimator</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithReferenceView:</span><span class="n">container</span><span class="p">];</span>
+</span><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">animator</span><span class="p">.</span><span class="n">delegate</span> <span class="o">=</span> <span class="n">self</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then back over in the gesture handler, we need to create the <code>PaneBehavior</code> when the gesture ends (I renamed the class <code>FinishingBehavior</code>)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">finishingBehavior</span> <span class="o">=</span> <span class="p">[[</span><span class="n">FinishingBehavior</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithItem:</span><span class="n">self</span><span class="p">.</span><span class="n">view</span><span class="p">];</span>
+</span><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">finishingBehavior</span><span class="p">.</span><span class="n">targetPoint</span> <span class="o">=</span> <span class="n">finishCenter</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">CGPointEqualToPoint</span><span class="p">(</span><span class="n">velocity</span><span class="p">,</span> <span class="n">CGPointZero</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">finishingBehavior</span><span class="p">.</span><span class="n">velocity</span> <span class="o">=</span> <span class="n">velocity</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Before we add the behavior to the animator (thus kicking off the dynamic system) we can assign an action block to the behavior which the animator will call on every &ldquo;tick&rdquo; of the system, and use that block to figure out if the view leaves the container view. When the view does leave the container view, we can stop the dynamic system by removing all the behaviors from the animator (this takes care of <strong>Step 3</strong> from above):</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">__weak</span> <span class="n">typeof</span><span class="p">(</span><span class="n">self</span><span class="p">)</span> <span class="n">weakSelf</span> <span class="o">=</span> <span class="n">self</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">self</span><span class="p">.</span><span class="n">finishingBehavior</span><span class="p">.</span><span class="n">action</span> <span class="o">=</span> <span class="o">^</span><span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">CGRectIntersectsRect</span><span class="p">(</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">frame</span><span class="p">,</span> <span class="n">weakSelf</span><span class="p">.</span><span class="n">view</span><span class="p">.</span><span class="n">frame</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">weakSelf</span><span class="p">.</span><span class="n">animator</span> <span class="n">removeAllBehaviors</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When all the behaviors are removed from the animator, or the view settles into place in the center of the screen, the <code>dynamicAnimatorDidPause:</code> delegate method will be called (remember we set the delegate on the animator to <code>self</code> when we created it). This is where we&rsquo;ll be cleaning up our transition:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="nf">dynamicAnimatorDidPause:</span><span class="p">(</span><span class="n">UIDynamicAnimator</span> <span class="o">*</span><span class="p">)</span><span class="nv">animator</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">animator</span> <span class="n">removeAllBehaviors</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="n">UIGestureRecognizer</span> <span class="o">*</span><span class="n">gesture</span> <span class="k">in</span> <span class="p">[[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="n">containerView</span><span class="p">]</span> <span class="n">gestureRecognizers</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">gesture</span><span class="p">.</span><span class="n">view</span> <span class="nl">removeGestureRecognizer:</span><span class="n">gesture</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="nl">completeTransition:</span><span class="o">!</span><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">context</span> <span class="n">transitionWasCancelled</span><span class="p">]];</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That&rsquo;s it! Phew. Grab all the code from <a href="https://gist.github.com/ericallam/42e68408ece4d4863604">this gist</a>.</p>
+
+<h3>Wrap up</h3>
+
+<p>The things I&rsquo;d really like you to takeaway from this post is to push the boundaries of animated transitions by making all transitions interactive, even if they start with an animation.</p>
+
+<p>We are entering into a new world of <a href="https://www.google.co.uk/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CC8QFjAA&amp;url=https%3A%2F%2Fmedium.com%2Fdesign-ux%2F926eb80d64e3&amp;ei=yA5-U_j3F-754QSZ2IGoDg&amp;usg=AFQjCNF4xgasT0ewQBZo1xddy4eElPz84A&amp;sig2=_Kd4UxEGJdz3EGHyx25bpw&amp;bvm=bv.67229260,d.bGE">Transitional Interfaces</a> and so even though this may seem like a lot of work for little benefit, to me it&rsquo;s worth it. And it&rsquo;s not that much code, the entire example project weighs in at just over 400 lines. I&rsquo;ve put it <a href="https://gist.github.com/ericallam/42e68408ece4d4863604">in a gist</a> if you&rsquo;d like to kick the tires.</p>
+
+<p>If you have any questions or feedback (or a better way to do this) please <a href="http://twitter.com/eallam">contact me on twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;m using <code>position</code> here because that is what we are animating. It&rsquo;d work the same way if we were animating any other animatable property, such as <code>backgroundColor</code> or <code>alpha</code>.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Again, if you are animating other animatable properties other than <code>position</code>, you&rsquo;d have to copy those from the presentation layer to the model layer too.<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AFNetworking SSL Pinning with Self-Signed Certificates]]></title>
