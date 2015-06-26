@@ -4,7 +4,7 @@
   <title><![CDATA[Category: iOS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ios/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-06-26T13:56:50+01:00</updated>
+  <updated>2015-06-26T13:58:23+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -18,7 +18,9 @@
     <link href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-1/"/>
     <updated>2015-06-26T12:40:00+01:00</updated>
     <id>http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-1</id>
-    <content type="html"><![CDATA[<p>We released <a href="http://qiktionary.com">Qiktionary</a> a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a mastermindish word puzzle. There are two modes: single player (the main game) and multiplayer where you can challenge your friends on Game Center to a round of three games. Qiktionary works on both iPhone and iPad.</p>
+    <content type="html"><![CDATA[<p><img src="http://f.cl.ly/items/1V343x033m0j352I1S40/Screen%20Shot%202015-06-26%20at%201.57.23%20pm.png" alt="image" /></p>
+
+<p>We released <a href="http://qiktionary.com">Qiktionary</a> a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a mastermindish word puzzle. There are two modes: single player (the main game) and multiplayer where you can challenge your friends on Game Center to a round of three games. Qiktionary works on both iPhone and iPad.</p>
 
 <p>Since it works on both the iPhone and the iPad, we considered the possibility of adding syncing. We knew some people would play on both their iPhone and iPad and would want their games to sync to all their devices. Multiplayer is built on top of Game Center matchmaking so we already have syncing there taken care of; but single player data is all just stored locally in a sqlite database.</p>
 
