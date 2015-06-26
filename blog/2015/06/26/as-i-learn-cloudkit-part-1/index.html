@@ -1,0 +1,168 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta name="google-site-verification" content="f1OtvP7JCHm6M9Ca7vMcFg3q-1NEOvDMcSKfKlVW_pA" />
+	<script type="text/javascript" src="//use.typekit.net/fbh4wul.js"></script>
+	<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>initWithFunk: by Eric Allam</title>
+
+<meta name="author" content="Eric Allam"> 
+
+<meta name="description" content="We released Qiktionary a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="initWithFunk:" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdn.sublimevideo.net/js/7rwly8ga.js"></script>
+
+	<style>
+		#header h1 {
+			font-size: 60px;
+		}
+
+		#header h4 {
+			margin-top: 22px;
+		}
+	</style>
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/" class="tk-anonymous-pro">initWithFunk:</a></h1>
+<h4>by <a href="http://twitter.com/eallam">Eric Allam</a></h4>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/portfolio">Portfolio</a></li>
+	<li><a href="/archives">Archive</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:initwithfunk.com">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">As I Learn CloudKit Syncing - Part 0</h2>
+	<div class="entry-content"><p>We released <a href="http://qiktionary.com">Qiktionary</a> a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a mastermindish word puzzle. There are two modes: single player (the main game) and multiplayer where you can challenge your friends on Game Center to a round of three games. Qiktionary works on both iPhone and iPad.</p>
+
+<p>Since it works on both the iPhone and the iPad, we considered the possibility of adding syncing. We knew some people would play on both their iPhone and iPad and would want their games to sync to all their devices. Multiplayer is built on top of Game Center matchmaking so we already have syncing there taken care of; but single player data is all just stored locally in a sqlite database.</p>
+
+<p>I punted on syncing until a week ago when I started implementing Game Center leaderboards and achievements for the single player game. Without syncing, the following scenario is likely to happen to people that play on both an iPhone and an iPad on the same Game Center account:</p>
+
+<ul>
+<li>Play many games on their iPhone, earning achievements that unlock prizes and rocket them up the leaderboard. The sqlite database on their iPhone diligently holds the records for all these games played. Game Center stores the info about their leaderboard scores and achievements</li>
+<li>Put down their iPhone and pick up their iPad, which doesn&rsquo;t know anything about all those games hidden away on their iPhone</li>
+<li>Qiktionary on the iPad shows them all these achievements they&rsquo;ve earned even though locally they haven&rsquo;t played a single game.</li>
+<li>Play a game on their iPad. Qiktionary updates their score on the leaderboard based on that single game. Player rockets back down the leaderboard. Qiktionary also attempted to award them the &ldquo;played your first game&rdquo; achievement even though they&rsquo;ve already played many games on their iPhone.</li>
+<li>Player is sad.</li>
+<li>Player leaves bad review on App Store.</li>
+<li>Qiktionary is sad.</li>
+</ul>
+
+
+<p>So it seems to me that there is no way of <a href="http://stackoverflow.com/questions/31007080/how-have-you-dealt-with-with-game-center-leaderboards-in-your-universal-game">getting around implementing syncing</a> when doing Game Center leaderboards/achievements for a univeral iOS game.</p>
+
+<p>Which brings me to CloudKit.</p>
+
+<p>I don&rsquo;t have a lot of time to build in syncing. I&rsquo;m not going to be running my own servers. There isn&rsquo;t a ton of data to sync (if a player completely finishes Qiktionary they will have only generated at most 10MB). Qiktionary for now is iOS only and even if we do expand to other platforms I&rsquo;m okay with the new CloudKit REST and JS APIs being sufficient to support that move. CloudKit also has nice support for this type of syncing strategy (which they call tiny data, all devices).</p>
+
+<p>So: CloudKit. This is what I&rsquo;m using and I&rsquo;ve been learning all I can about it the last couple of days. I&rsquo;ve watched all the WWDC sessions (some multiple times). <a href="https://developer.apple.com/videos/wwdc/2014/?id=208">Introducing CloudKit</a> and <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a> from last year and <a href="https://developer.apple.com/videos/wwdc/2015/?id=715">CloudKit Tips and Tricks</a> from this year were especially helpful. The <a href="https://developer.apple.com/videos/wwdc/2015/?id=226">Advanced NSOperations</a> talk from this year has also given me a strategy for working with CloudKit operations that I think I am happy with (I&rsquo;ll cover this in a future post). There isn&rsquo;t a ton of Sample Code but I&rsquo;ve learned some from the <a href="https://developer.apple.com/library/prerelease/ios/samplecode/CloudAtlas/Introduction/Intro.html">CloudKit Catalog</a> and the <a href="https://cdn.apple-cloudkit.com/cloudkit-catalog/">live JS version</a> is pretty helpful for quickly getting a feel for the APIs. I&rsquo;ve also learned a lot by looking at the source for the newly released <a href="https://github.com/CloudKitSpace/CKSIncrementalStore">CKSIncrementalStore</a>.</p>
+
+<p>There are a decent amount of CloudKit tutorials out there but I&rsquo;ve found most of them are focused on the Big Data, Tiny Phone strategy of CloudKit. This is the strategy used by things like iCloud Photos.</p>
+
+<p>Which is why I am writing this series (shamefully copying David Smith&rsquo;s <a href="https://david-smith.org/watchkit/">As I Learn watchOS</a> series). I&rsquo;ve just started implementing sync but I am going to try and talk through some of the problems I run into and figure out which things work and which things don&rsquo;t.</p>
+
+<p>Stay tuned for Part 1 where I will be covereing the basic &ldquo;Tiny Data, All Devices&rdquo; strategy of CloudKit.</p>
+
+<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-26T12:40:00+01:00" pubdate data-updated="true">Jun 26<span>th</span>, 2015</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/ailcks/'>AILCKS</a>, <a class='category' href='/blog/categories/cloudkit/'>CloudKit</a>, <a class='category' href='/blog/categories/sync/'>Sync</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2015
+
+    Eric Allam
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/javascripts/slash.js"></script>
+
+
+
+
+
+
+<script type="text/javascript">
+  var _gauges = _gauges || [];
+  (function() {
+    var t   = document.createElement('script');
+    t.type  = 'text/javascript';
+    t.async = true;
+    t.id    = 'gauges-tracker';
+    t.setAttribute('data-site-id', '51a38dc8613f5d7c63000012');
+    t.src = '//secure.gaug.es/track.js';
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(t, s);
+  })();
+</script>
+</body>
+</html>
