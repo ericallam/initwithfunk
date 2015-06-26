@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-06-26T13:55:55+01:00</updated>
+  <updated>2015-06-26T13:56:50+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -50,31 +50,6 @@
 <p>Stay tuned for Part 1 where I will be covereing the basic &ldquo;Tiny Data, All Devices&rdquo; strategy of CloudKit.</p>
 
 <p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Keynote Prototyping on the iPhone]]></title>
-    <link href="http://initwithfunk.com/blog/2014/07/23/keynote-prototyping-on-the-iphone/"/>
-    <updated>2014-07-23T14:04:00+01:00</updated>
-    <id>http://initwithfunk.com/blog/2014/07/23/keynote-prototyping-on-the-iphone</id>
-    <content type="html"><![CDATA[<!-- Developer Forum post on viewing in portrait -->
-
-
-<!-- Prototyping - Fake it to you make it 2014 talk -->
-
-
-<!-- Apple support doc with people talking about portrait -->
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Interactive Animations with iOS 8]]></title>
-    <link href="http://initwithfunk.com/blog/2014/06/25/interactive-animations-with-ios-8/"/>
-    <updated>2014-06-25T13:39:00+01:00</updated>
-    <id>http://initwithfunk.com/blog/2014/06/25/interactive-animations-with-ios-8</id>
-    <content type="html"><![CDATA[
 ]]></content>
   </entry>
   
