@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="We released Qiktionary a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="I described in the first part of this series, I&rsquo;m adopting the &ldquo;Little Data, Lots of Clients&rdquo; CloudKit syncing strategy for &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,92 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">
+		
+			As I Learn CloudKit Syncing - Part 1: Asking Questions</a>
+	</h2>
+	<div class="entry-content">
+		<p>I described in <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0/">the first part</a> of this series, I&rsquo;m adopting the &ldquo;Little Data, Lots of Clients&rdquo; CloudKit syncing strategy for syncing <a href="http://twitter.com">Qiktionary</a> game data.</p>
+
+<p><img src='http://f.cl.ly/items/0d0i1Z2h1S0L453y1E0C/LittleDataLotsOfClients.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>Both the <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a> talk from 2014 and the <a href="https://developer.apple.com/videos/wwdc/2015/?id=715">CloudKit Tips and Tricks</a> talk from this year cover how to use CloudKit in this way, but in a very high-level way:</p>
+
+<ul>
+<li>Use a custom <code>CKRecordZone</code> in the user&rsquo;s private database.</li>
+<li>Custom zones support atomic modifications (only commit the changes if all changes can occur)</li>
+<li>Custom zones also support fetching a &ldquo;diff&rdquo; of changes that have occurred since the last sync using the <code>CKFetchRecordChangesOperation</code> class</li>
+<li>Custom zones allow you to create a <code>CKSubscription</code> that will notify clients of any changes to a zone, allowing the client to fetch the changes with the aforementioned <code>CKFetchRecordChangesOperation</code></li>
+<li><code>CKRecord</code> has support for serializing only the metadata fields for storage alongside the local record using <code>- encodeSystemFieldsWithCoder:</code>.</li>
+<li><code>CKRecord</code>&rsquo;s can be submitted back up to iCloud with just the metadata fields and fields that have changed. Which means you don&rsquo;t have to fetch an entire <code>CKRecord</code> before updating it.</li>
+</ul>
+
+
+<p>This seems to be the basic machinery useful in building CloudKit syncing. In <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a>, they also layout a recipe to follow when performing a sync:</p>
+
+<ol>
+<li>Track local changes</li>
+<li>Send changes to the server</li>
+<li>Resolve conflicts</li>
+<li>Fetch server changes with <code>CKFetchRecordChangesOperation</code></li>
+<li>Apply server changes</li>
+<li>Save server change token</li>
+</ol>
+
+
+<p>One of the main strengths of CloudKit is how un-opinionated it is. As just a transport mechanism, it&rsquo;s very flexible in how you structure your application and architecture. What this means though is that there is a lot more left to figure out on your own. At this point in the journey, here are all the things I&rsquo;m left to figure out:</p>
+
+<ul>
+<li>How do I track local changes? Should I hook into sqlite and listen for all changes made to the tables I&rsquo;m syncing and create some sort of &ldquo;changes&rdquo; table. What does that table look like?</li>
+<li>When do I perform a sync? At app launch? Every 60 seconds? Whenever anything changes? When the app is backgrounded?</li>
+<li>What about when a record is deleted? I can&rsquo;t just delete it from the local database anymore? Maybe that can go into the &ldquo;changes&rdquo; database too?</li>
+<li>How do I deal with conflict errors when sending modifications to the server? Actually, the fact that CloudKit is making me answer this question is great, I should be forced to figure this one out. Core Data syncing suffered because it hid too much of this from the programmer.</li>
+<li>What if iCloud is down? Or the device has a bad connection? Or the server is busy? Or iCloud rate limits me? Or there is no iCloud account? Or the user switches iCloud accounts? Or I&rsquo;m sending too much data?</li>
+<li>Since Qiktionary is already out, what kind of problems will I run into migrating people&rsquo;s data when they first open the app after Qiktionary w/syncing is released? What if Qiktionary tries to do the initial import on both a person&rsquo;s iPhone and iPad at the same time?</li>
+<li>A whole other class of questions related to architecture and writing clean code. What&rsquo;s the best way to go about that?</li>
+<li>Also, for Qiktionary, this all has to corresponding to a Game Center account. So the local games are all syncing to iCloud under a certain GC account. If the user switches to a different GC account, the games don&rsquo;t go along with them. This means they could be playing on multiple GC accounts on a single iCloud account. Question: How?</li>
+<li>Zone Subscriptions are another concern. They aren&rsquo;t 100% necessary but they should help to answer at least half of the &ldquo;when do I sync&rdquo; question. But they come with their own questions, like: when do I ask the user for permission to send them push notifications for this purpose? Is it a little silly to say hey I need your permission for push notifications because: sync?</li>
+<li>How do I do this all in a way that doesn&rsquo;t break other things, like duplicating games or lost games, overwriting games, scores, and achievements?</li>
+</ul>
+
+
+<p>Since I am a couple of days into this now, I think I have a couple of these questions nailed down (I&rsquo;ve even written some code so a few of those answers have survived that test), but many are still open questions, which I will trying to answer as this work (and this series) continues for the next couple of weeks.</p>
+
+<p>Stay tuned for Part 2. Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-26T15:01:00+01:00" pubdate data-updated="true">Jun 26<span>th</span>, 2015</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/ailcks/'>AILCKS</a>, <a class='category' href='/blog/categories/cloudkit/'>CloudKit</a>, <a class='category' href='/blog/categories/sync/'>Sync</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
@@ -2465,89 +2551,6 @@
 
 
 	<a class='category' href='/blog/categories/dtrace/'>DTrace</a>, <a class='category' href='/blog/categories/instruments/'>Instruments</a>, <a class='category' href='/blog/categories/xcode/'>Xcode</a>, <a class='category' href='/blog/categories/debugging/'>debugging</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>, <a class='category' href='/blog/categories/locationd/'>locationd</a>, <a class='category' href='/blog/categories/simulator/'>simulator</a>
-
-
-</div>
-	
-</div></article>
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/blog/2013/05/26/the-case-of-the-wwdc-sellout/">
-		
-			The Case of the WWDC Sellout</a>
-	</h2>
-	<div class="entry-content">
-		<p><img src="http://i.imgur.com/A0WoI4T.jpg" /></p>
-
-<p>It starts in the throat. Like a burly man with a size 13 boot stepping down on your neck, the feeling that something horrible has gone wrong.</p>
-
-<p>There is a bug in production.</p>
-
-<p>Any programmer that has a modicum of experience shipping software knows this feeling, because programmers are the leading cause of bugs on Earth<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.  It&rsquo;s a terrible feeling and almost always leads to the worst day in a programmer&rsquo;s life up until that point<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
-
-<p>But very few of us have experienced a day quite like the day one or more programmers had when WWDC &ldquo;Sold Out&rdquo; a couple weeks ago. The sale should have been a complete success: unprecedented demand, a rabid group of developers with their credit cards in hand.  After only <a href="http://www.marco.org/2013/05/24/71-seconds">71 seconds</a> went by, the WWDC ticket site featured a prominent &ldquo;Sold Out&rdquo; banner and the dreams of thousands of developers were instantly crushed, yours truly included.</p>
-
-<p>But then, just a few hours later, something strange happened: developers started getting mysterious phone calls from Apple letting them know they had tickets for them. I was one of the those developers. I was there as the clock rendered<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> 10am PST and I was able to put a WWDC ticket in my Shopping Cart<sup id="fnref:4"><a href="#fn:4" rel="footnote">4</a></sup>, but when I submitted the payment form I was greated with a 500 error and when I went back to the cart it was empty, and the tickets were sold out.  The Apple Developer support person who called me only said that they knew that I had tried to purchase a ticket for WWDC and they still had it available for me to purchase, and that I&rsquo;d be getting an email in the next 12 hours allowing me to grab it.</p>
-
-<p>There have been theories as to what happened, and Marco Arment <a href="http://www.marco.org/2013/05/24/71-seconds">just posted</a> his theory this weekend:</p>
-
-<blockquote><p>My best guess: some part of the infrastructure handling the purchases mistook 4,500 connections, transactions, or sessions for 4,500 sales. And when the front-end servers collapsed under the load of everyone hitting them at once — a first this year, since the availability time was preannounced — we all started refreshing, those connections started stacking up, and something on the back-end triggered the “Sold Out” state early because it was mistakenly counting all of those failed sessions</p></blockquote>
-
-
-<p>I think he&rsquo;s close but a little bit off. My guess is that there were multiple problems with their ticket reservation system. Reservation systems are very easy to screw up<sup id="fnref:5"><a href="#fn:5" rel="footnote">5</a></sup>, especially in distributed systems.</p>
-
-<p>Here is how I think it went down:</p>
-
-<p>All the tickets were reserved (by placing a ticket into the cart you&rsquo;d effectively &ldquo;reserve&rdquo; the ticket), and a majority of those reservations were fulfilled by the developer checking out and paying for the ticket.  The rest of the reservations were wrongly fulfilled when there was a bug in the checkout process that caused an exception somewhere in the distributed stack.  The checkout process failed in a way that isolated itself from the reservation system, so the final state was a fulfilled reservation, an empty cart, and an unpurchased ticket. What likely remained as evidence to the correct state of the system were log files scattered over dozens of servers and in a variety of formats.  That&rsquo;s why it took so long to begin calling (according to anecdotal twitter reports and my own call, I&rsquo;m guessing it took 5+ hours), and why Apple couldn&rsquo;t make an immediate announcement as to what happened: they didn&rsquo;t know themselves.</p>
-
-<p>I don&rsquo;t envy the programmers who probably spent a couple sleepless nights figuring the mess out, and I am grateful that they&rsquo;ve been reaching out to developers to try and get them the tickets they deserve for WWDC.  As a first-time attendant, I&rsquo;m looking forward to meeting an Apple engineer or two, and maybe buying them a beer or a cranberry juice, giving them a pat on the back, and letting them know that we&rsquo;ve been there, we knew how they were feeling, that something terrible happened but it&rsquo;s not the end of the world.</p>
-
-<p>There was a bug in production.<sup id="fnref:6"><a href="#fn:6" rel="footnote">6</a></sup></p>
-<div class="footnotes">
-<hr/>
-<ol>
-<li id="fn:1">
-<p>Unproven hypothesis: I&rsquo;ve created more bugs than 99% of the population<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
-<li id="fn:2">
-<p>Programmers are very dramatic<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
-<li id="fn:3">
-<p>Clocks don&rsquo;t &ldquo;strike&rdquo; anymore, do they?<a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
-<li id="fn:4">
-<p>We&rsquo;re going to need to rethink that metaphor soon. The Amazon Generation won&rsquo;t know what the hell we&rsquo;re talking about<a href="#fnref:4" rev="footnote">&#8617;</a></p></li>
-<li id="fn:5">
-<p>I know this because I&rsquo;ve written one and I screwed it up multiple times<a href="#fnref:5" rev="footnote">&#8617;</a></p></li>
-<li id="fn:6">
-<p>One can hope for WWDC 2013, amirite?<a href="#fnref:6" rev="footnote">&#8617;</a></p></li>
-</ol>
-</div>
-
-
-		
-		
-	</div>
-
-
-<div class="meta">
-	<div class="date">
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-05-26T17:32:00+01:00" pubdate data-updated="true">May 26<span>th</span>, 2013</time></div>
-	<div class="tags">
-
-
-	<a class='category' href='/blog/categories/random-development/'>Random Development</a>, <a class='category' href='/blog/categories/wwdc/'>WWDC</a>
 
 
 </div>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: CloudKit | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/cloudkit/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-06-26T14:07:26+01:00</updated>
+  <updated>2015-06-26T15:47:29+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,61 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 1: Asking Questions]]></title>
+    <link href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/"/>
+    <updated>2015-06-26T15:01:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1</id>
+    <content type="html"><![CDATA[<p>I described in <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0/">the first part</a> of this series, I&rsquo;m adopting the &ldquo;Little Data, Lots of Clients&rdquo; CloudKit syncing strategy for syncing <a href="http://twitter.com">Qiktionary</a> game data.</p>
+
+<p><img src='http://f.cl.ly/items/0d0i1Z2h1S0L453y1E0C/LittleDataLotsOfClients.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>Both the <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a> talk from 2014 and the <a href="https://developer.apple.com/videos/wwdc/2015/?id=715">CloudKit Tips and Tricks</a> talk from this year cover how to use CloudKit in this way, but in a very high-level way:</p>
+
+<ul>
+<li>Use a custom <code>CKRecordZone</code> in the user&rsquo;s private database.</li>
+<li>Custom zones support atomic modifications (only commit the changes if all changes can occur)</li>
+<li>Custom zones also support fetching a &ldquo;diff&rdquo; of changes that have occurred since the last sync using the <code>CKFetchRecordChangesOperation</code> class</li>
+<li>Custom zones allow you to create a <code>CKSubscription</code> that will notify clients of any changes to a zone, allowing the client to fetch the changes with the aforementioned <code>CKFetchRecordChangesOperation</code></li>
+<li><code>CKRecord</code> has support for serializing only the metadata fields for storage alongside the local record using <code>- encodeSystemFieldsWithCoder:</code>.</li>
+<li><code>CKRecord</code>&rsquo;s can be submitted back up to iCloud with just the metadata fields and fields that have changed. Which means you don&rsquo;t have to fetch an entire <code>CKRecord</code> before updating it.</li>
+</ul>
+
+
+<p>This seems to be the basic machinery useful in building CloudKit syncing. In <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a>, they also layout a recipe to follow when performing a sync:</p>
+
+<ol>
+<li>Track local changes</li>
+<li>Send changes to the server</li>
+<li>Resolve conflicts</li>
+<li>Fetch server changes with <code>CKFetchRecordChangesOperation</code></li>
+<li>Apply server changes</li>
+<li>Save server change token</li>
+</ol>
+
+
+<p>One of the main strengths of CloudKit is how un-opinionated it is. As just a transport mechanism, it&rsquo;s very flexible in how you structure your application and architecture. What this means though is that there is a lot more left to figure out on your own. At this point in the journey, here are all the things I&rsquo;m left to figure out:</p>
+
+<ul>
+<li>How do I track local changes? Should I hook into sqlite and listen for all changes made to the tables I&rsquo;m syncing and create some sort of &ldquo;changes&rdquo; table. What does that table look like?</li>
+<li>When do I perform a sync? At app launch? Every 60 seconds? Whenever anything changes? When the app is backgrounded?</li>
+<li>What about when a record is deleted? I can&rsquo;t just delete it from the local database anymore? Maybe that can go into the &ldquo;changes&rdquo; database too?</li>
+<li>How do I deal with conflict errors when sending modifications to the server? Actually, the fact that CloudKit is making me answer this question is great, I should be forced to figure this one out. Core Data syncing suffered because it hid too much of this from the programmer.</li>
+<li>What if iCloud is down? Or the device has a bad connection? Or the server is busy? Or iCloud rate limits me? Or there is no iCloud account? Or the user switches iCloud accounts? Or I&rsquo;m sending too much data?</li>
+<li>Since Qiktionary is already out, what kind of problems will I run into migrating people&rsquo;s data when they first open the app after Qiktionary w/syncing is released? What if Qiktionary tries to do the initial import on both a person&rsquo;s iPhone and iPad at the same time?</li>
+<li>A whole other class of questions related to architecture and writing clean code. What&rsquo;s the best way to go about that?</li>
+<li>Also, for Qiktionary, this all has to corresponding to a Game Center account. So the local games are all syncing to iCloud under a certain GC account. If the user switches to a different GC account, the games don&rsquo;t go along with them. This means they could be playing on multiple GC accounts on a single iCloud account. Question: How?</li>
+<li>Zone Subscriptions are another concern. They aren&rsquo;t 100% necessary but they should help to answer at least half of the &ldquo;when do I sync&rdquo; question. But they come with their own questions, like: when do I ask the user for permission to send them push notifications for this purpose? Is it a little silly to say hey I need your permission for push notifications because: sync?</li>
+<li>How do I do this all in a way that doesn&rsquo;t break other things, like duplicating games or lost games, overwriting games, scores, and achievements?</li>
+</ul>
+
+
+<p>Since I am a couple of days into this now, I think I have a couple of these questions nailed down (I&rsquo;ve even written some code so a few of those answers have survived that test), but many are still open questions, which I will trying to answer as this work (and this series) continues for the next couple of weeks.</p>
+
+<p>Stay tuned for Part 2. Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 0]]></title>
