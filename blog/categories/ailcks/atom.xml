@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AILCKS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ailcks/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-06-29T23:16:20+01:00</updated>
+  <updated>2015-06-29T23:17:21+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -36,7 +36,7 @@
 
 <p>I could put the words and the word packs in the public iCloud database and use CloudKit to fetch them when needed, but that would change the assumption that the data is just a synchronous database-fetch away. There would be benefits to putting them in iCloud, like the ability to update them without an app release. Maybe in a later release.</p>
 
-<p>I could also build out the Game Center leaderboard and achievement features<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> alongside sync but instead I&rsquo;m doing this CloudKit integration as it&rsquo;s own release and so those features will have to wait until sync is implemented (and works reliably).</p>
+<p>I could also build out the Game Center leaderboard and achievement features<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> alongside sync but instead I&rsquo;m doing this CloudKit integration as its own release and so those features will have to wait until sync is implemented (and works reliably).</p>
 
 <p>What I am going to do is:</p>
 
