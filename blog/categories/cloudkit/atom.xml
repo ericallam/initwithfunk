@@ -4,7 +4,7 @@
   <title><![CDATA[Category: CloudKit | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/cloudkit/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-06-26T15:47:29+01:00</updated>
+  <updated>2015-06-29T23:14:57+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,60 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AILCKS - Part 2: Keeping Things Simple]]></title>
+    <link href="http://initwithfunk.com/blog/2015/06/29/ailcks-part-2-keeping-things-simple/"/>
+    <updated>2015-06-29T20:38:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/06/29/ailcks-part-2-keeping-things-simple</id>
+    <content type="html"><![CDATA[<p>I&rsquo;m building sync for a game called <a href="http://qiktionary.com">Qiktionary</a>, which is a simple (yet hard) word game. Discover the secret word by guessing other words and using deductive logic. Basically <a href="https://en.wikipedia.org/wiki/Mastermind_(board_game">Word Mastermind</a> except at the end of a game of Qiktionary you learn an interesting fact related to that word<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>So the data model is composed of stuff like words, games, guesses, etc. There is also word packs which is just a way for us to logically group words and provide progress in a more interesting way.  They look like this:</p>
+
+<p><img src='http://f.cl.ly/items/3C0L3N0F0y170J1o1S1W/img_4272.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>All this data is stored locally on the device in a SQLite database. I&rsquo;m using <a href="https://github.com/marcoarment/FCModel">FCModel</a> to simplify the database access as I like the clean and small abstraction over <a href="https://github.com/ccgus/fmdb">FMDB</a>. The app ships with a seed database that includes all the word packs and words (and a few other things) that is copied on first launch. If that doesn&rsquo;t work the app also ships with a large plist file that has the word and word pack structured data and the app can import from the plist into the database if need be.</p>
+
+<p>This basic setup works pretty well. As you can see, there is no server involved. Everything is stored locally.  When that above list of word packs need to be rendered there is no asynchronous network request to fetch the them, just a simple <code>SELECT * FROM WordPack</code><sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<p>I like simple.</p>
+
+<p>Introducing syncing makes this not so simple, which makes me nervous. CloudKit is supposed to be easy, but just because something is easy doesn&rsquo;t mean it can&rsquo;t <a href="http://www.infoq.com/presentations/Simple-Made-Easy">yield a good deal of complexity</a>.</p>
+
+<p>So my goal is to try and keep the complexity to a minimum. To accomplish that I have to do the absolute bare amount of changes to the app as I can. That means I&rsquo;m only going to sync what I have to.</p>
+
+<p>I could put the words and the word packs in the public iCloud database and use CloudKit to fetch them when needed, but that would change the assumption that the data is just a synchronous database-fetch away. There would be benefits to putting them in iCloud, like the ability to update them without an app release. Maybe in a later release.</p>
+
+<p>I could also build out the Game Center leaderboard and achievement features<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> alongside sync but instead I&rsquo;m doing this CloudKit integration as it&rsquo;s own release and so those features will have to wait until sync is implemented (and works reliably).</p>
+
+<p>What I am going to do is:</p>
+
+<ul>
+<li>Push device Game data to iCloud.</li>
+<li>Pull Game data from iCloud and put it on the device.</li>
+<li>Associate Game data with a Game Center player</li>
+</ul>
+
+
+<p>Hopefully that is simple enough that even I can&rsquo;t screw it up.</p>
+
+<p>Watch out for Part 3 where I&rsquo;m probably going to screw it up.</p>
+
+<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>The facts are courtesy of the <a href="http://qi.com/people/elves">QI Elves</a>, a group of devishly smart people who write all the funny stuff on the <a href="http://qi.com">QI</a> show hosted by Stephen Fry. <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Okay, it is a bit more complicated than that but still it&rsquo;s synchronous.<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Remember from <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0/">Part 0</a> that leaderboards and achievements were the impetus to getting sync implemented in the first place <a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 1: Asking Questions]]></title>
@@ -64,7 +118,7 @@
 
 <p>Since I am a couple of days into this now, I think I have a couple of these questions nailed down (I&rsquo;ve even written some code so a few of those answers have survived that test), but many are still open questions, which I will trying to answer as this work (and this series) continues for the next couple of weeks.</p>
 
-<p>Stay tuned for Part 2. Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+<p>Stay tuned for <a href="http://initwithfunk.com/blog/2015/06/29/ailcks-part-2-keeping-things-simple">Part 2</a>. Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
 ]]></content>
   </entry>
   
@@ -104,7 +158,7 @@
 
 <p>Which is why I am writing this series (shamefully copying David Smith&rsquo;s <a href="https://david-smith.org/watchkit/">As I Learn watchOS</a> series). I&rsquo;ve just started implementing sync but I am going to try and talk through some of the problems I run into and figure out which things work and which things don&rsquo;t.</p>
 
-<p>Stay tuned for Part 1 where I will be talking through the &ldquo;Tiny Data, All Devices&rdquo; strategy of CloudKit.</p>
+<p>Stay tuned for <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">Part 1</a> where I will be talking through the &ldquo;Tiny Data, All Devices&rdquo; strategy of CloudKit.</p>
 
 <p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
 ]]></content>

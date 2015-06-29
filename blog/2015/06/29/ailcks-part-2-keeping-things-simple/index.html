@@ -1,0 +1,182 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta name="google-site-verification" content="f1OtvP7JCHm6M9Ca7vMcFg3q-1NEOvDMcSKfKlVW_pA" />
+	<script type="text/javascript" src="//use.typekit.net/fbh4wul.js"></script>
+	<script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+	<meta charset="utf-8">
+	<title>initWithFunk: by Eric Allam</title>
+
+<meta name="author" content="Eric Allam"> 
+
+<meta name="description" content="I&rsquo;m building sync for a game called Qiktionary, which is a simple (yet hard) word game. Discover the secret word by guessing other words and &hellip;"> <meta name="keywords" content="">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="initWithFunk:" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdn.sublimevideo.net/js/7rwly8ga.js"></script>
+
+	<style>
+		#header h1 {
+			font-size: 60px;
+		}
+
+		#header h4 {
+			margin-top: 22px;
+		}
+	</style>
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/" class="tk-anonymous-pro">initWithFunk:</a></h1>
+<h4>by <a href="http://twitter.com/eallam">Eric Allam</a></h4>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul>
+	<li><a href="/">Blog</a></li>
+	<li><a href="/about">About</a></li>
+	<li><a href="/portfolio">Portfolio</a></li>
+	<li><a href="/archives">Archive</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:initwithfunk.com">
+			</form>
+		</div>
+	</div>
+</nav>
+
+
+</header>
+
+	<div id="content" class="inner"><article class="post">
+	<h2 class="title">AILCKS - Part 2: Keeping Things Simple</h2>
+	<div class="entry-content"><p>I&rsquo;m building sync for a game called <a href="http://qiktionary.com">Qiktionary</a>, which is a simple (yet hard) word game. Discover the secret word by guessing other words and using deductive logic. Basically <a href="https://en.wikipedia.org/wiki/Mastermind_(board_game">Word Mastermind</a> except at the end of a game of Qiktionary you learn an interesting fact related to that word<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>So the data model is composed of stuff like words, games, guesses, etc. There is also word packs which is just a way for us to logically group words and provide progress in a more interesting way.  They look like this:</p>
+
+<p><img src='http://f.cl.ly/items/3C0L3N0F0y170J1o1S1W/img_4272.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
+
+<p>All this data is stored locally on the device in a SQLite database. I&rsquo;m using <a href="https://github.com/marcoarment/FCModel">FCModel</a> to simplify the database access as I like the clean and small abstraction over <a href="https://github.com/ccgus/fmdb">FMDB</a>. The app ships with a seed database that includes all the word packs and words (and a few other things) that is copied on first launch. If that doesn&rsquo;t work the app also ships with a large plist file that has the word and word pack structured data and the app can import from the plist into the database if need be.</p>
+
+<p>This basic setup works pretty well. As you can see, there is no server involved. Everything is stored locally.  When that above list of word packs need to be rendered there is no asynchronous network request to fetch the them, just a simple <code>SELECT * FROM WordPack</code><sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<p>I like simple.</p>
+
+<p>Introducing syncing makes this not so simple, which makes me nervous. CloudKit is supposed to be easy, but just because something is easy doesn&rsquo;t mean it can&rsquo;t <a href="http://www.infoq.com/presentations/Simple-Made-Easy">yield a good deal of complexity</a>.</p>
+
+<p>So my goal is to try and keep the complexity to a minimum. To accomplish that I have to do the absolute bare amount of changes to the app as I can. That means I&rsquo;m only going to sync what I have to.</p>
+
+<p>I could put the words and the word packs in the public iCloud database and use CloudKit to fetch them when needed, but that would change the assumption that the data is just a synchronous database-fetch away. There would be benefits to putting them in iCloud, like the ability to update them without an app release. Maybe in a later release.</p>
+
+<p>I could also build out the Game Center leaderboard and achievement features<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup> alongside sync but instead I&rsquo;m doing this CloudKit integration as it&rsquo;s own release and so those features will have to wait until sync is implemented (and works reliably).</p>
+
+<p>What I am going to do is:</p>
+
+<ul>
+<li>Push device Game data to iCloud.</li>
+<li>Pull Game data from iCloud and put it on the device.</li>
+<li>Associate Game data with a Game Center player</li>
+</ul>
+
+
+<p>Hopefully that is simple enough that even I can&rsquo;t screw it up.</p>
+
+<p>Watch out for Part 3 where I&rsquo;m probably going to screw it up.</p>
+
+<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>The facts are courtesy of the <a href="http://qi.com/people/elves">QI Elves</a>, a group of devishly smart people who write all the funny stuff on the <a href="http://qi.com">QI</a> show hosted by Stephen Fry. <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>Okay, it is a bit more complicated than that but still it&rsquo;s synchronous.<a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Remember from <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0/">Part 0</a> that leaderboards and achievements were the impetus to getting sync implemented in the first place <a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-29T20:38:00+01:00" pubdate data-updated="true">Jun 29<span>th</span>, 2015</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/ailcks/'>AILCKS</a>, <a class='category' href='/blog/categories/cloudkit/'>CloudKit</a>, <a class='category' href='/blog/categories/sync/'>Sync</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	<a class="addthis_button_tweet"></a>
+	
+	
+<!---	<a class="addthis_counter addthis_pill_style"></a> --->
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2015
+
+    Eric Allam
+
+<br>
+Powered by Octopress.
+</footer>
+	<script src="/javascripts/slash.js"></script>
+
+
+
+
+
+
+<script type="text/javascript">
+  var _gauges = _gauges || [];
+  (function() {
+    var t   = document.createElement('script');
+    t.type  = 'text/javascript';
+    t.async = true;
+    t.id    = 'gauges-tracker';
+    t.setAttribute('data-site-id', '51a38dc8613f5d7c63000012');
+    t.src = '//secure.gaug.es/track.js';
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(t, s);
+  })();
+</script>
+</body>
+</html>
