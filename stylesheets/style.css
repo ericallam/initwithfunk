@@ -125,6 +125,7 @@ p pre code,li pre code {
 font-size:14px!important;
 background:none;
 border:none;
+font-family:"SourceCodePro","Menlo","Monaco","Andale Mono","lucida console","Courier New",monospace!important;
 }
 
 .pre-code,html .gist .gist-file .gist-syntax .gist-highlight pre,.highlight code {

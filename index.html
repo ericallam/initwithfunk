@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="I&rsquo;m building sync for a game called Qiktionary, which is a simple (yet hard) word game. Discover the secret word by guessing other words and &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="There are two sides to the CloudKit API: convienence and operations. The convienence API is there to quickly get up and running with CRUD, meant to &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,144 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2015/07/02/as-i-learn-cloudkit-syncing-part-3-operational/">
+		
+			As I Learn CloudKit Syncing - Part 3: Operational Approach</a>
+	</h2>
+	<div class="entry-content">
+		<p>There are two sides to the CloudKit API: convienence and operations. The convienence API is there to quickly get up and running with CRUD, meant to work on single items like saving a <code>CKRecord</code> or fetching one. Even though the convienence API can make it easy to get started quickly, it can get messy:</p>
+
+<p><img src='http://f.cl.ly/items/3z2Z0S3o2A25203x3S3k/Screen%20Shot%202015-07-02%20at%209.38.33%20am.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" height="300px" /></p>
+
+<p>Implementing CloudKit syncing using the &ldquo;Tiny Data, All Devices&rdquo; strategy as I <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">wrote earlier</a> necessitates the use of the other side of the CloudKit API: operations. More specifically, NSOperation and NSOperationQueue.</p>
+
+<p>So in preperation for this feature, I did some homework. I read the <a href="https://developer.apple.com/library/ios/documentation/General/Conceptual/ConcurrencyProgrammingGuide/Introduction/Introduction.html">Concurrency Programming Guide</a>, the <a href="https://developer.apple.com/library/mac/documentation/Cocoa/Reference/NSOperation_class/">NSOperation</a> reference, and the <a href="https://developer.apple.com/library/ios/documentation/Cocoa/Reference/NSOperationQueue_class/">NSOperationQueue</a> reference.</p>
+
+<p>I also watched <a href="https://developer.apple.com/videos/wwdc/2015/?id=226">Advanced NSOperations</a> talk from this years WWDC and my mind was opened to the power of NSOperation<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>If you haven&rsquo;t watched that talk yet, please stop reading now and watch it, and then <a href="https://developer.apple.com/sample-code/wwdc/2015/?q=Advanced%20Operations">download the sample code</a><sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<h3>Advanced Operations and CKRecordZone</h3>
+
+<p>The key part of the CloudKit service that makes this syncing solution possible is the use of a custom <a href="https://developer.apple.com/library/prerelease/ios/documentation/CloudKit/Reference/CKRecordZone_class/index.html">CKRecordZone</a>. A <code>CKRecordZone</code> object &ldquo;defines an area for organizing related records in a database&rdquo;. The public and private databases each have a default zone, and custom zones can be created as needed. Custom zones have two extra bits of functionality that are crucial for syncing: atomic commits and the ability to fetch only the changes that have occurred since the last fetch.</p>
+
+<p>So I&rsquo;m going to need to create a <code>CKRecordZone</code> before I can sync the game data to that zone. But before I can create a <code>CKRecordZone</code> I need to make sure I have permission to access iCloud. I could use the convienence API:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">container</span> <span class="nl">accountStatusWithCompletionHandler:</span><span class="o">^</span><span class="p">(</span><span class="n">CKAccountStatus</span> <span class="n">accountStatus</span><span class="p">,</span> <span class="n">NSError</span> <span class="o">*</span><span class="n">error</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">accountStatus</span> <span class="o">==</span> <span class="n">CKAccountStatusAvailable</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">CKRecordZone</span> <span class="o">*</span><span class="n">newZone</span> <span class="o">=</span> <span class="p">[[</span><span class="n">CKRecordZone</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithZoneName:</span><span class="s">@&quot;SyncZone&quot;</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">[</span><span class="n">self</span><span class="p">.</span><span class="n">container</span><span class="p">.</span><span class="n">privateCloudDatabase</span> <span class="nl">saveRecordZone:</span><span class="n">newZone</span> <span class="nl">completionHandler:</span><span class="o">^</span><span class="p">(</span><span class="n">CKRecordZone</span> <span class="o">*</span><span class="n">zone</span><span class="p">,</span> <span class="n">NSError</span> <span class="o">*</span><span class="n">zoneError</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">zoneError</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="c1">// Start syncing</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="p">}];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This&hellip; smells. It works until things start going wrong and those errors stop being nil. Being able to gracefully recover from errors, as the CloudKit team has said, isn&rsquo;t the difference between a good app and a great app. It&rsquo;s the difference between a non-functioning app and a functioning one.</p>
+
+<p>So I <em>think</em> I can do better. And that &ldquo;better&rdquo; comes from using the operation API and some of the techniques found in the Advanced NSOperations talk.</p>
+
+<h3>Operation Dependencies</h3>
+
+<p>An operation is a discrete unit-of-work. Using NSOperation dependencies, you can make sure an operation only performs work if another operation finishes successfully.</p>
+
+<p>The high level dependency graph of the above code looks a bit like this:</p>
+
+<pre class="chart">
+ ┌────────────────┐ 
+ │                │ 
+ │ Account Status │ 
+ │                │ 
+ └────────────────┘ 
+          ▲         
+          │         
+          │         
+┌──────────────────┐
+│                  │
+│Create Record Zone│
+│                  │
+└──────────────────┘
+          ▲         
+          │         
+          │         
+ ┌────────────────┐ 
+ │                │ 
+ │      Sync      │ 
+ │                │ 
+ └────────────────┘ 
+</pre>
+
+
+<p>Sync will only execute if Create Record Zone is successful. Create Record Zone will only execute if the Account Status check is a success.</p>
+
+<p>This smells better. In the Create Record Zone operation, if CloudKit returns an error, I&rsquo;ll have a chance to recover. For example, if I get back the <code>CKErrorRequestRateLimited</code> error, I can grab the <code>CKErrorRetryAfterKey</code> value from the error&rsquo;s userInfo dictionary and schedule an attempt to retry the operation. If the retry is successful, the Create Record Zone operation completes and the Sync operation is then executed.</p>
+
+<p>So that&rsquo;s the high-level overview of my approach to building a gracefully recovering CloudKit syncing solution. In the next post I&rsquo;m going to cover more specifics of the implementation.</p>
+
+<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>And I&rsquo;m <a href="https://nickharris.wordpress.com/2015/06/22/nsoperation-my-story/">not the only one</a>   <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>The first version of the sample code has a few bugs in it but <a href="https://forums.developer.apple.com/message/18766#18766">Dave DeLong is working on a fix</a>   <a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-02T09:17:00+01:00" pubdate data-updated="true">Jul 2<span>nd</span>, 2015</time></div>
+	<div class="tags">
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
@@ -2159,125 +2297,6 @@
 
 
 	<a class='category' href='/blog/categories/animations/'>Animations</a>, <a class='category' href='/blog/categories/objective-c/'>Objective-C</a>, <a class='category' href='/blog/categories/ios7/'>iOS7</a>
-
-
-</div>
-	
-</div></article>
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/blog/2013/09/29/easy-markdown-rendering-with-nsattributedstring-on-ios-7/">
-		
-			Easy Markdown Rendering With NSAttributedString on iOS 7</a>
-	</h2>
-	<div class="entry-content">
-		<p>A little known addition to iOS 7 makes rendering markdown to a <code>UITextView</code> really simple. The <a href="https://developer.apple.com/library/ios/documentation/UIKit/Reference/NSAttributedString_UIKit_Additions/Reference/Reference.html#//apple_ref/doc/uid/TP40011688">UIKit Additions</a> to <a href="https://developer.apple.com/library/ios/documentation/cocoa/reference/foundation/Classes/NSAttributedString_Class/Reference/Reference.html">NSAttributedString</a> now includes a document type option called <code>NSHTMLTextDocumentType</code> that does exactly what you&rsquo;d expect: it allows you to easily render HTML in a <code>UITextView</code>, <code>UILabel</code>, or <code>UITextField</code>. So if we combine the new document type with a markdown parser, we can go from this:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>A First Level Header
-</span><span class='line'>====================
-</span><span class='line'>
-</span><span class='line'>## A smaller header
-</span><span class='line'>
-</span><span class='line'>**Now** is the time for all *good men* to come to
-</span><span class='line'>the aid of their country. This is an `NSAttributedString`.
-</span><span class='line'>
-</span><span class='line'>Brought to you by [Eric Allam](http://twitter.com/eallam)
-</span><span class='line'>
-</span><span class='line'>### Header 3
-</span><span class='line'>
-</span><span class='line'>*   Candy.
-</span><span class='line'>*   Gum.
-</span><span class='line'>*   Booze.
-</span><span class='line'>
-</span><span class='line'>![eallam twitter profile](https://si0.twimg.com/profile_images/3066111745/97865436e3ef039bc7c2420fe5be366e.png)</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To this:</p>
-
-<p><img src="http://f.cl.ly/items/2W3006463n0S1V183Y1n/iOS%20Simulator%20Screen%20shot%20Sep%2029,%202013,%209.39.58%20AM.png" alt="Alt Text" width="320"></p>
-
-<p>With only a couple of lines of code.</p>
-
-<p>First, you need a markdown parser which will take a markdown formatted string and turn it into HTML. For this example we are going to be using <a href="https://github.com/mdiep/MMMarkdown">MMMarkdown</a>.</p>
-
-<p><code>MMMarkdown</code> makes it extremely simple to turn some markdown into HTML. If we had the markdown above in a file called <code>Example.md</code> in our project, you can turn it into HTML like so:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">markdown</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSString</span> <span class="nl">stringWithContentsOfFile:</span><span class="p">[[</span><span class="n">NSBundle</span> <span class="n">mainBundle</span><span class="p">]</span> <span class="nl">pathForResource:</span><span class="s">@&quot;Example&quot;</span> <span class="nl">ofType:</span><span class="s">@&quot;md&quot;</span><span class="p">]</span>  <span class="nl">encoding:</span><span class="n">NSUTF8StringEncoding</span> <span class="nl">error:</span><span class="nb">nil</span><span class="p">];</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">html</span> <span class="o">=</span> <span class="p">[</span><span class="n">MMMarkdown</span> <span class="nl">HTMLStringWithMarkdown:</span><span class="n">markdown</span> <span class="nl">error:</span><span class="nb">nil</span><span class="p">];</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Then, once you have the HTML, just create the <code>NSAttributedString</code> like so:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSDictionary</span> <span class="o">*</span><span class="n">options</span> <span class="o">=</span> <span class="err">@</span><span class="p">{</span><span class="nl">NSDocumentTypeDocumentAttribute:</span> <span class="n">NSHTMLTextDocumentType</span><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">NSAttributedString</span> <span class="o">*</span><span class="n">preview</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NSAttributedString</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithData:</span><span class="p">[</span><span class="n">_html</span> <span class="nl">dataUsingEncoding:</span><span class="n">NSUTF8StringEncoding</span><span class="p">]</span> <span class="nl">options:</span><span class="n">options</span> <span class="nl">documentAttributes:</span><span class="nb">nil</span> <span class="nl">error:</span><span class="o">&amp;</span><span class="n">error</span><span class="p">];</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now all you have to do is set the <code>attributedText</code> property on a TextKit backed view (e.g. <code>UITextView</code>), like this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UITextView</span> <span class="o">*</span><span class="n">liveView</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UITextView</span> <span class="n">alloc</span><span class="p">]</span> <span class="n">init</span><span class="p">];</span>
-</span><span class='line'><span class="n">liveView</span><span class="p">.</span><span class="n">attributedText</span> <span class="o">=</span> <span class="n">preview</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This doesn&rsquo;t mean the <code>UITextView</code> can display all the HTML you throw at it. Stylesheets have no effect (although certain CSS styles do seem to work, but it&rsquo;s not documented anywhere what is supported and what is not). If you do want to display a full web page, you could of course always use <code>UIWebView</code> instead.</p>
-
-<p>I&rsquo;ve uploaded an example project that demonstrating how to put this all together called <a href="https://github.com/rubymaverick/MarkyMark">MarkyMark</a> (the naming of this repo happened to coincide with a viewing of Pain and Gain).</p>
-
-		
-		
-	</div>
-
-
-<div class="meta">
-	<div class="date">
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-09-29T09:55:00+01:00" pubdate data-updated="true">Sep 29<span>th</span>, 2013</time></div>
-	<div class="tags">
-
-
-	<a class='category' href='/blog/categories/html/'>HTML</a>, <a class='category' href='/blog/categories/markdown/'>Markdown</a>, <a class='category' href='/blog/categories/textkit/'>TextKit</a>, <a class='category' href='/blog/categories/ios7/'>iOS7</a>
 
 
 </div>
