@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="There are two sides to the CloudKit API: convienence and operations. The convienence API is there to quickly get up and running with CRUD, meant to &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="I&rsquo;m syncing games. Game data can change in three ways: A new game, a change to an existing game, and a deleted game. All three are tracked &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,126 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes/">
+		
+			As I Learn CloudKit Syncing - Part 4: Tracking Local Changes</a>
+	</h2>
+	<div class="entry-content">
+		<p>I&rsquo;m syncing games. Game data can change in three ways: A new game, a change to an existing game, and a deleted game. All three are tracked differently.</p>
+
+<h3>Tracking new games</h3>
+
+<p>I can know if a game is new based on whether it is already linked to a CKRecord. According to the docs, the way you link local data to a CKRecord is through encoding the CKRecord&rsquo;s metadata with the <code>-encodeSystemFieldsWithCoder</code> method on <code>CKRecord</code>.</p>
+
+<p>At first I was saving the encoded metadata along with the game data in the Game table. It was a BLOB column<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup> called <code>remoteRecord</code>. <code>FCModel</code> will store BLOB data as an instance of NSData. Here is how I turned the CKRecord into NSData to store in the Game table:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSMutableData</span> <span class="o">*</span><span class="n">data</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSMutableData</span> <span class="n">data</span><span class="p">];</span>
+</span><span class='line'><span class="n">NSKeyedArchiver</span> <span class="o">*</span><span class="n">archiver</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NSKeyedArchiver</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initForWritingWithMutableData:</span><span class="n">data</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">[</span><span class="n">instanceValue</span> <span class="nl">encodeSystemFieldsWithCoder:</span><span class="n">archiver</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">[</span><span class="n">archiver</span> <span class="n">finishEncoding</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">NSData</span> <span class="o">*</span><span class="n">remoteRecordData</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSData</span> <span class="nl">dataWithData:</span><span class="n">data</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And here is how I converted it back from an instance of NSData to a CKRecord:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSData</span> <span class="o">*</span><span class="n">data</span> <span class="o">=</span> <span class="p">(</span><span class="n">NSData</span> <span class="o">*</span><span class="p">)</span><span class="n">databaseValue</span><span class="p">;</span>
+</span><span class='line'><span class="n">NSKeyedUnarchiver</span> <span class="o">*</span><span class="n">coder</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NSKeyedUnarchiver</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initForReadingWithData:</span><span class="n">data</span><span class="p">];</span>
+</span><span class='line'><span class="n">CKRecord</span> <span class="o">*</span><span class="n">record</span> <span class="o">=</span> <span class="p">[[</span><span class="n">CKRecord</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithCoder:</span><span class="n">coder</span><span class="p">];</span>
+</span><span class='line'><span class="p">[</span><span class="n">coder</span> <span class="n">finishDecoding</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This worked well until I implemented the &ldquo;Fetch server changes with CKFetchRecordChangesOperation&rdquo; step of the CloudKit Syncing recipe<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<p>In this step, at some point I need to query the Game table and lookup a specific game, and all I have is a <code>CKRecord</code> instance. I can&rsquo;t search the <code>remoteRecord</code> BLOB column for the CKRecord because it&rsquo;s been encoded into a bag of bytes.</p>
+
+<p>I also can&rsquo;t query the Game table by the gameID (that&rsquo;s the Game table&rsquo;s primary key column) which is stored in the <code>CKRecord</code>. Even though the gameID is one of the Game properties I&rsquo;m saving on the CKRecord. Why?</p>
+
+<p>It has to do with how <code>CKFetchRecordChangesOperation</code> works<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>. As its name implies, it only pulls in <em>changes</em>. So for example if a game&rsquo;s record on iCloud has its <code>guesses</code> value changed, then the <code>CKRecord</code> returned by <code>CKFetchRecordChangesOperation</code> will only include the new value for <code>guesses</code> but not any of the other values on that <code>CKRecord</code>.</p>
+
+<p>So the way I&rsquo;ve worked around this is to create a new table called <code>RemoteRecord</code> that has two fields, a <code>remoteRecordID</code> and a <code>remoteRecord</code>.  Now the <code>CKRecord</code> instance is encoded into the <code>remoteRecord</code> column of <code>RemoteRecord</code>, and the local Game table has a <code>remoteRecordID</code> foreign key relationship to the RemoteRecord table.</p>
+
+<p>The thing that makes it possible to query a local Game from a CKRecord is what I&rsquo;m using as the <code>remoteRecordID</code>. Every CKRecord has a CKRecordID associated with it, and that CKRecordID has a property called <code>recordName</code> which is a string identifier that doesn&rsquo;t exceed 255 characters. By using the <code>recordName</code> as the value of the <code>remoteRecordID</code>, I can now easily lookup a local Game from a CKRecord, kind of like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSString</span> <span class="o">*</span><span class="n">recordName</span> <span class="o">=</span> <span class="n">record</span><span class="p">.</span><span class="n">recordID</span><span class="p">.</span><span class="n">recordName</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">Game</span> <span class="o">*</span><span class="n">existingGame</span> <span class="o">=</span> <span class="p">[</span><span class="n">Game</span> <span class="nl">firstInstanceWhere:</span><span class="s">@&quot;remoteRecordID = ?&quot;</span><span class="p">,</span> <span class="n">recordName</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I did consider just putting the <code>remoteRecordID</code> column on the Game table and not creating the RemoteRecord table at all, but storing the CKRecord in a seperate table from Game made some things easier when tracking changes to a local game.</p>
+
+<p>So to bring this back around to how I&rsquo;m tracking new local games, with this setup, all I have to do is query for Games that don&rsquo;t have a remoteRecordID set, like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">NSArray</span> <span class="o">*</span><span class="n">newLocalGames</span> <span class="o">=</span> <span class="p">[</span><span class="n">Game</span> <span class="nl">instancesWhere:</span><span class="s">@&quot;remoteRecordID IS NULL&quot;</span><span class="p">];</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the next installment I&rsquo;m going to cover how I&rsquo;m tracking local changes to games.</p>
+
+<p>Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;m using SQLite for my local database, wrapped by FMDB and FCModel<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>As a reminder about what that recipe is, read <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">Part 1</a><a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Definitely going to be digging into this more later.<a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-07T09:20:00+01:00" pubdate data-updated="true">Jul 7<span>th</span>, 2015</time></div>
+	<div class="tags">
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
@@ -2244,59 +2364,6 @@
 
 
 	<a class='category' href='/blog/categories/facebook/'>Facebook</a>, <a class='category' href='/blog/categories/paper/'>Paper</a>, <a class='category' href='/blog/categories/tutorial/'>Tutorial</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
-
-
-</div>
-	
-</div></article>
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/blog/2013/12/17/building-better-transitions-with-ios-7/">
-		
-			Building Better Transitions With iOS 7</a>
-	</h2>
-	<div class="entry-content">
-		<p><img src="http://f.cl.ly/items/113S3E2f3r1w111K1d1X/photo.jpg" width=400 /></p>
-
-<p>I gave my first iOS related tech talk yesterday at <a href="http://london.alttechtalks.com">Alt Tech Talks London</a>, which was a blast, especially to share the stage with such <a href="http://london.alttechtalks.com/#speakers">accomplished people</a> in the iOS community.</p>
-
-<p>As I said in my talk, transitions are important, and the flexibilty brought on by the opening up of the transition system in iOS 7 has created some opportunities for developers to make their apps standout and provide a better experience for their users.</p>
-
-<p>Ironically, I built my presentation as a series of videos, animations, and transitions, and so it doesn&rsquo;t really make sense to post the slides as a flat PDF. Instead I&rsquo;ve posted an Xcode project that includes all the code so that you can open it up and fiddle around with it, read the comments, or use it as a basis for transitions in your own apps. Here is the final product of a customized modal transition:</p>
-
-<iframe src="//player.vimeo.com/video/82126619" width="400" height="706" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
-
-
-<p> <p><a href="http://vimeo.com/82126619">Example Custom Modal Transition in iOS 7</a> from <a href="http://vimeo.com/user4111390">Eric Allam</a> on <a href="https://vimeo.com">Vimeo</a>.</p></p>
-
-<p>Check it out <a href="https://github.com/rubymaverick/PhotoTransitionsExample">on Github</a> or <a href="https://github.com/rubymaverick/PhotoTransitionsExample/archive/master.zip">Download the ZIP</a>.</p>
-
-		
-		
-	</div>
-
-
-<div class="meta">
-	<div class="date">
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-12-17T19:16:00+00:00" pubdate data-updated="true">Dec 17<span>th</span>, 2013</time></div>
-	<div class="tags">
-
-
-	<a class='category' href='/blog/categories/animations/'>Animations</a>, <a class='category' href='/blog/categories/objective-c/'>Objective-C</a>, <a class='category' href='/blog/categories/ios7/'>iOS7</a>
 
 
 </div>
