@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AILCKS | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/ailcks/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-07-07T21:12:50+01:00</updated>
+  <updated>2015-07-08T12:13:22+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,181 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 4: Tracking Local Changes]]></title>
+    <link href="http://initwithfunk.com/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes/"/>
+    <updated>2015-07-07T09:20:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes</id>
+    <content type="html"><![CDATA[<p>I&rsquo;m syncing games. Game data can change in three ways: A new game, a change to an existing game, and a deleted game. All three are tracked differently.</p>
+
+<h3>Tracking new games</h3>
+
+<p>I can know if a game is new based on whether it is already linked to a CKRecord. According to the docs, the way you link local data to a CKRecord is through encoding the CKRecord&rsquo;s metadata with the <code>-encodeSystemFieldsWithCoder</code> method on <code>CKRecord</code>.</p>
+
+<p>At first I was saving the encoded metadata along with the game data in the Game table. It was a BLOB column<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup> called <code>remoteRecord</code>. <code>FCModel</code> will store BLOB data as an instance of NSData. Here is how I turned the CKRecord into NSData to store in the Game table:</p>
+
+<p>```objc
+NSMutableData <em>data = [NSMutableData data];
+NSKeyedArchiver </em>archiver = [[NSKeyedArchiver alloc] initForWritingWithMutableData:data];</p>
+
+<p>[instanceValue encodeSystemFieldsWithCoder:archiver];</p>
+
+<p>[archiver finishEncoding];</p>
+
+<p>NSData *remoteRecordData = [NSData dataWithData:data];
+```</p>
+
+<p>And here is how I converted it back from an instance of NSData to a CKRecord:</p>
+
+<p><code>objc
+NSData *data = (NSData *)databaseValue;
+NSKeyedUnarchiver *coder = [[NSKeyedUnarchiver alloc] initForReadingWithData:data];
+CKRecord *record = [[CKRecord alloc] initWithCoder:coder];
+[coder finishDecoding];
+</code></p>
+
+<p>This worked well until I implemented the &ldquo;Fetch server changes with CKFetchRecordChangesOperation&rdquo; step of the CloudKit Syncing recipe<sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<p>In this step, at some point I need to query the Game table and lookup a specific game, and all I have is a <code>CKRecord</code> instance. I can&rsquo;t search the <code>remoteRecord</code> BLOB column for the CKRecord because it&rsquo;s been encoded into a bag of bytes.</p>
+
+<p>I also can&rsquo;t query the Game table by the gameID (that&rsquo;s the Game table&rsquo;s primary key column) which is stored in the <code>CKRecord</code>. Even though the gameID is one of the Game properties I&rsquo;m saving on the CKRecord. Why?</p>
+
+<p>It has to do with how <code>CKFetchRecordChangesOperation</code> works<sup id="fnref:3"><a href="#fn:3" rel="footnote">3</a></sup>. As its name implies, it only pulls in <em>changes</em>. So for example if a game&rsquo;s record on iCloud has its <code>guesses</code> value changed, then the <code>CKRecord</code> returned by <code>CKFetchRecordChangesOperation</code> will only include the new value for <code>guesses</code> but not any of the other values on that <code>CKRecord</code>.</p>
+
+<p>So the way I&rsquo;ve worked around this is to create a new table called <code>RemoteRecord</code> that has two fields, a <code>remoteRecordID</code> and a <code>remoteRecord</code>.  Now the <code>CKRecord</code> instance is encoded into the <code>remoteRecord</code> column of <code>RemoteRecord</code>, and the local Game table has a <code>remoteRecordID</code> foreign key relationship to the RemoteRecord table.</p>
+
+<p>The thing that makes it possible to query a local Game from a CKRecord is what I&rsquo;m using as the <code>remoteRecordID</code>. Every CKRecord has a CKRecordID associated with it, and that CKRecordID has a property called <code>recordName</code> which is a string identifier that doesn&rsquo;t exceed 255 characters. By using the <code>recordName</code> as the value of the <code>remoteRecordID</code>, I can now easily lookup a local Game from a CKRecord, kind of like this:</p>
+
+<p>```objc
+NSString *recordName = record.recordID.recordName;</p>
+
+<p>Game *existingGame = [Game firstInstanceWhere:@&ldquo;remoteRecordID = ?&rdquo;, recordName];
+```</p>
+
+<p>I did consider just putting the <code>remoteRecordID</code> column on the Game table and not creating the RemoteRecord table at all, but storing the CKRecord in a seperate table from Game made some things easier when tracking changes to a local game.</p>
+
+<p>So to bring this back around to how I&rsquo;m tracking new local games, with this setup, all I have to do is query for Games that don&rsquo;t have a remoteRecordID set, like this:</p>
+
+<p><code>objc
+NSArray *newLocalGames = [Game instancesWhere:@"remoteRecordID IS NULL"];
+</code></p>
+
+<p>In the next installment I&rsquo;m going to cover how I&rsquo;m tracking local changes to existing games.</p>
+
+<p>Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;m using SQLite for my local database, wrapped by FMDB and FCModel<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>As a reminder about what that recipe is, read <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">Part 1</a><a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+<li id="fn:3">
+<p>Definitely going to be digging into this more later.<a href="#fnref:3" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 3: Operational Approach]]></title>
+    <link href="http://initwithfunk.com/blog/2015/07/02/as-i-learn-cloudkit-syncing-part-3-operational/"/>
+    <updated>2015-07-02T09:17:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/07/02/as-i-learn-cloudkit-syncing-part-3-operational</id>
+    <content type="html"><![CDATA[<p>There are two sides to the CloudKit API: convienence and operations. The convienence API is there to quickly get up and running with CRUD, meant to work on single items like saving a <code>CKRecord</code> or fetching one. Even though the convienence API can make it easy to get started quickly, it can get messy:</p>
+
+<p><img src='http://f.cl.ly/items/3z2Z0S3o2A25203x3S3k/Screen%20Shot%202015-07-02%20at%209.38.33%20am.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" height="300px" /></p>
+
+<p>Implementing CloudKit syncing using the &ldquo;Tiny Data, All Devices&rdquo; strategy as I <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">wrote earlier</a> necessitates the use of the other side of the CloudKit API: operations. More specifically, NSOperation and NSOperationQueue.</p>
+
+<p>So in preperation for this feature, I did some homework. I read the <a href="https://developer.apple.com/library/ios/documentation/General/Conceptual/ConcurrencyProgrammingGuide/Introduction/Introduction.html">Concurrency Programming Guide</a>, the <a href="https://developer.apple.com/library/mac/documentation/Cocoa/Reference/NSOperation_class/">NSOperation</a> reference, and the <a href="https://developer.apple.com/library/ios/documentation/Cocoa/Reference/NSOperationQueue_class/">NSOperationQueue</a> reference.</p>
+
+<p>I also watched <a href="https://developer.apple.com/videos/wwdc/2015/?id=226">Advanced NSOperations</a> talk from this years WWDC and my mind was opened to the power of NSOperation<sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>.</p>
+
+<p>If you haven&rsquo;t watched that talk yet, please stop reading now and watch it, and then <a href="https://developer.apple.com/sample-code/wwdc/2015/?q=Advanced%20Operations">download the sample code</a><sup id="fnref:2"><a href="#fn:2" rel="footnote">2</a></sup>.</p>
+
+<h3>Advanced Operations and CKRecordZone</h3>
+
+<p>The key part of the CloudKit service that makes this syncing solution possible is the use of a custom <a href="https://developer.apple.com/library/prerelease/ios/documentation/CloudKit/Reference/CKRecordZone_class/index.html">CKRecordZone</a>. A <code>CKRecordZone</code> object &ldquo;defines an area for organizing related records in a database&rdquo;. The public and private databases each have a default zone, and custom zones can be created as needed. Custom zones have two extra bits of functionality that are crucial for syncing: atomic commits and the ability to fetch only the changes that have occurred since the last fetch.</p>
+
+<p>So I&rsquo;m going to need to create a <code>CKRecordZone</code> before I can sync the game data to that zone. But before I can create a <code>CKRecordZone</code> I need to make sure I have permission to access iCloud. I could use the convienence API:</p>
+
+<p>```objc
+[self.container accountStatusWithCompletionHandler:^(CKAccountStatus accountStatus, NSError *error) {</p>
+
+<pre><code>if (accountStatus == CKAccountStatusAvailable) {
+
+    CKRecordZone *newZone = [[CKRecordZone alloc] initWithZoneName:@"SyncZone"];
+
+    [self.container.privateCloudDatabase saveRecordZone:newZone completionHandler:^(CKRecordZone *zone, NSError *zoneError) {
+
+        if (!zoneError) {
+            // Start syncing
+        }
+
+    }];
+}
+</code></pre>
+
+<p>}];
+```</p>
+
+<p>This&hellip; smells. It works until things start going wrong and those errors stop being nil. Being able to gracefully recover from errors, as the CloudKit team has said, isn&rsquo;t the difference between a good app and a great app. It&rsquo;s the difference between a non-functioning app and a functioning one.</p>
+
+<p>So I <em>think</em> I can do better. And that &ldquo;better&rdquo; comes from using the operation API and some of the techniques found in the Advanced NSOperations talk.</p>
+
+<h3>Operation Dependencies</h3>
+
+<p>An operation is a discrete unit-of-work. Using NSOperation dependencies, you can make sure an operation only performs work if another operation finishes successfully.</p>
+
+<p>The high level dependency graph of the above code looks a bit like this:</p>
+
+<pre class="chart">
+ ┌────────────────┐ 
+ │                │ 
+ │ Account Status │ 
+ │                │ 
+ └────────────────┘ 
+          ▲         
+          │         
+          │         
+┌──────────────────┐
+│                  │
+│Create Record Zone│
+│                  │
+└──────────────────┘
+          ▲         
+          │         
+          │         
+ ┌────────────────┐ 
+ │                │ 
+ │      Sync      │ 
+ │                │ 
+ └────────────────┘ 
+</pre>
+
+
+<p>Sync will only execute if Create Record Zone is successful. Create Record Zone will only execute if the Account Status check is a success.</p>
+
+<p>This smells better. In the Create Record Zone operation, if CloudKit returns an error, I&rsquo;ll have a chance to recover. For example, if I get back the <code>CKErrorRequestRateLimited</code> error, I can grab the <code>CKErrorRetryAfterKey</code> value from the error&rsquo;s userInfo dictionary and schedule an attempt to retry the operation. If the retry is successful, the Create Record Zone operation completes and the Sync operation is then executed.</p>
+
+<p>So that&rsquo;s the high-level overview of my approach to building a gracefully recovering CloudKit syncing solution. In the next post I&rsquo;m going to cover more specifics of the implementation.</p>
+
+<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>And I&rsquo;m <a href="https://nickharris.wordpress.com/2015/06/22/nsoperation-my-story/">not the only one</a>   <a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+<li id="fn:2">
+<p>The first version of the sample code has a few bugs in it but <a href="https://forums.developer.apple.com/message/18766#18766">Dave DeLong is working on a fix</a>   <a href="#fnref:2" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AILCKS - Part 2: Keeping Things Simple]]></title>
