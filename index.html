@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="I&rsquo;m syncing games. Game data can change in three ways: A new game, a change to an existing game, and a deleted game. All three are tracked &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="This is part 5 in a series of posts talking through how I built CloudKit syncing into Qiktionary In the last installment of this series I discussed &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,225 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2015/07/08/as-i-learn-cloudkit-syncing-part-5-tracking-game-changes/">
+		
+			As I Learn CloudKit Syncing - Part 5: Tracking Game Changes</a>
+	</h2>
+	<div class="entry-content">
+		<p><em>This is part 5 in a <a href="http://initwithfunk.com/blog/categories/ailcks/">series of posts</a> talking through how I built CloudKit syncing into Qiktionary</em></p>
+
+<p>In the <a href="http://initwithfunk.com/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes/">last installment</a> of this series I discussed how I was tracking newly created games.</p>
+
+<p>Tracking changes to a game that has already been synced with CloudKit has to be approached in a different way.</p>
+
+<p>The first approach I thought about using was based on time. I would track the &ldquo;last updated&rdquo; times of all the games and also track the last sync time. Then I could just query for all games with a more recent &ldquo;last updated&rdquo; value.</p>
+
+<p>I decided against that approach for a couple of reasons. I was worried I wouldn&rsquo;t be able to correctly track the last synced date when things went wrong with a sync, thus possibly letting some game updates slip through the cracks. And I also wanted to be a good CloudKit citizen and only send values that had actually changed since the last sync, and not the entire game every time there was a change.</p>
+
+<h3>The approach I&rsquo;m using</h3>
+
+<p>I decided to create a table called GameChange that stores the <code>gameID</code> and a set of <code>changedFields</code> that correspond to column names on the Game table. When a game is updated I create a GameChange record with the set of fields that have changed on the game. If there is already a GameChange record for that game, I update the GameChange&rsquo;s <code>changedFields</code> value with any new fields that have changed on that game.</p>
+
+<p>This makes it really easy to know what games have changed, all I have to do is <code>SELECT * FROM GameChange</code>. Then, after those changes have been sent to CloudKit using the <code>CKModifyRecordsOperation</code><sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>, I can just delete the GameChange record.</p>
+
+<h3>Don&rsquo;t track changes that don&rsquo;t need to be synced</h3>
+
+<p>It took me a bit to really figure this out but it may seem pretty obvious to you: only track changes to a game that need to be sent to CloudKit. For example, I ignore changes when:</p>
+
+<ul>
+<li>Updating the <code>remoteRecordID</code> field.</li>
+<li>Updating a game with new data that was fetched from CloudKit.</li>
+</ul>
+
+
+<p> I do this by having two different &ldquo;save&rdquo; methods on my Game class, <code>save</code> and <code>saveWithoutTrackingChanges</code>. The <code>save</code> method is inherited from <code>FCModel</code>, and it looks a bit like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">save</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSArray</span> <span class="o">*</span><span class="n">changedFieldNames</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="n">changedFieldNamesWithoutRemoteColumns</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">existsInDB</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">existsInDatabase</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">generateChanges</span> <span class="o">=</span> <span class="o">!</span><span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">saved</span> <span class="o">=</span> <span class="p">[</span><span class="n">super</span> <span class="n">save</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">saved</span> <span class="o">&amp;&amp;</span> <span class="n">generateChanges</span> <span class="o">&amp;&amp;</span> <span class="n">existsInDB</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="kt">BOOL</span> <span class="n">hasChanges</span> <span class="o">=</span> <span class="n">changedFieldNames</span><span class="p">.</span><span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">hasChanges</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">GameChange</span> <span class="nl">saveChangeForGame:</span><span class="n">self</span> <span class="nl">withChangedFields:</span><span class="n">changedFieldNames</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">return</span> <span class="n">saved</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">saved</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note the call to <code>changedFieldNamesWithoutRemoteColumns</code> which returns an array of field names that have changed on the game record, filtering out the <code>remoteRecordID</code> column that we don&rsquo;t need to sync with iCloud.</p>
+
+<p>saveWithoutTrackingChanges just sets the stopSaveChangeGeneration flag around a call to <code>save</code>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">saveWithoutTrackingChanges</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span> <span class="o">=</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="n">save</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The other important piece here is the call to <code>[GameChange saveChangeForGame:self withChangedFields:changedFieldNames]</code>, which is implemented like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">+</span> <span class="p">(</span><span class="n">instancetype</span><span class="p">)</span><span class="nf">saveChangeForGame:</span><span class="p">(</span><span class="n">Game</span> <span class="o">*</span><span class="p">)</span><span class="nv">game</span> <span class="nf">withChangedFields:</span><span class="p">(</span><span class="n">NSArray</span> <span class="o">*</span><span class="p">)</span><span class="nv">changedFields</span><span class="p">;</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">GameChange</span> <span class="o">*</span><span class="n">gameChange</span> <span class="o">=</span> <span class="p">[</span><span class="n">GameChange</span> <span class="nl">firstInstanceWhere:</span><span class="s">@&quot;gameID = ?&quot;</span><span class="p">,</span> <span class="n">game</span><span class="p">.</span><span class="n">gameID</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">gameChange</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">gameChange</span> <span class="o">=</span> <span class="p">[</span><span class="n">GameChange</span> <span class="n">new</span><span class="p">];</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">gameID</span> <span class="o">=</span> <span class="n">game</span><span class="p">.</span><span class="n">gameID</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSSet</span> <span class="nl">setWithArray:</span><span class="n">changedFields</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="n">NSSet</span> <span class="o">*</span><span class="n">existingChangedFields</span> <span class="o">=</span> <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">NSMutableSet</span> <span class="o">*</span><span class="n">mutableChangedFields</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSMutableSet</span> <span class="nl">setWithSet:</span><span class="n">existingChangedFields</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">mutableChangedFields</span> <span class="nl">addObjectsFromArray:</span><span class="n">changedFields</span><span class="p">];</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span> <span class="o">=</span> <span class="n">mutableChangedFields</span><span class="p">.</span><span class="n">copy</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">([</span><span class="n">gameChange</span> <span class="n">save</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">gameChange</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="nb">nil</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Bonus: tracking game deletions</h3>
+
+<p>I take a similar approach to tracking when a local game is deleted. I have a GameDeletion table that stores the <code>CKRecordID</code> of any game that has been deleted (and has already been synced to iCloud). I don&rsquo;t keep the local Game record in the database either (with something like a <code>deleted</code> BOOL to mark it as deleted). The Game record is really deleted from the database, along with it&rsquo;s corresponding RemoteRecord entry.</p>
+
+<p>When I&rsquo;m setting up my <code>CKModifyRecordsOperation</code>, all I have to do is <code>SELECT * FROM GameDeletion</code>. Then after the operation succeeds, I can delete the GameDeletion record.</p>
+
+<h3>Tracking complete</h3>
+
+<p>If you recall the syncing recipe is as follows:</p>
+
+<ol>
+<li> Track local changes</li>
+<li> Send changes to the server</li>
+<li> Resolve conflicts</li>
+<li> Fetch server changes with <code>CKFetchRecordChangesOperation</code></li>
+<li> Apply server changes</li>
+<li> Save server change token</li>
+</ol>
+
+
+<p>Now that I&rsquo;ve tracked all the local changes I need to track, it&rsquo;ll finally be time to start sending those changes to the server. That I will start covering in my next post.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;ll eventually get to how I&rsquo;m using the <code>CKModifyRecordsOperation</code> to send all these local changes to CloudKit.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-08T14:08:00+01:00" pubdate data-updated="true">Jul 8<span>th</span>, 2015</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/ailcks/'>AILCKS</a>, <a class='category' href='/blog/categories/cloudkit/'>CloudKit</a>, <a class='category' href='/blog/categories/sync/'>Sync</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
 
 
     <article class="post">
@@ -2299,79 +2518,6 @@
 
 
 	<a class='category' href='/blog/categories/apple-maps/'>Apple Maps</a>, <a class='category' href='/blog/categories/gis/'>GIS</a>, <a class='category' href='/blog/categories/google-maps/'>Google Maps</a>, <a class='category' href='/blog/categories/mapkit/'>MapKit</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>, <a class='category' href='/blog/categories/ios-7/'>iOS 7</a>
-
-
-</div>
-	
-</div></article>
-
-
-    <article class="post">
-	<h2 class="title">
-		
-		<a href="/blog/2014/02/07/how-to-build-the-facebook-paper-status-bar-hover/">
-		
-			How to Build the Facebook Paper Status Bar Hover</a>
-	</h2>
-	<div class="entry-content">
-		<p><img src="http://i.imgur.com/SHpj1Ll.gif" alt="paper" /></p>
-
-<p>Among the <a href="http://blog.brianlovin.com/design-details-paper-by-facebook">many</a> great little design details in the new <a href="https://www.facebook.com/paper">Paper by Facebook</a> app released last week, this status-bar-hover thing caught me by surprise.  My first reaction was &ldquo;Hey, they can&rsquo;t do that!&rdquo;, but of course (and to quote my <a href="http://www.youtube.com/watch?v=3A0q36NOgdQ">favorite line</a> from Independence Day) well they just eh&hellip; did.</p>
-
-<p>After a little digging around, I&rsquo;ve figured out how to do it and it involves using multiple <strong>UIWindow</strong> instances. I&rsquo;ve always thought that iOS applications could only ever use one <code>UIWindow</code>, but that turns out to be not the case. It&rsquo;s perfectly alright to have more than the <code>[UIApplication sharedApplication].keyWindow</code> which you usually create in the AppDelegate (or Storyboard creates it for you).</p>
-
-<p>A <code>UIWindow</code> is just a subclass of <code>UIView</code>, but it&rsquo;s also a special type of view that&rsquo;s specifically for providing an area for displaying views and for distributing events to those views. A <code>UIWindow</code> instance has a property called <code>windowLevel</code> that allows you to specify where on the z-index the window appears relative to other windows in the app. Most of the time you only have your main window with a <code>windowLevel</code> set to <code>UIWindowLevelNormal</code>, and then occasionally a <code>UIAlertView</code> window is displayed with a <code>windowLevel</code> of <code>UIWindowLevelAlert</code>.</p>
-
-<p>So to create a new <code>UIWindow</code> and have it&rsquo;s contents appear above the status bar, all you have to do is this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UIWindow</span> <span class="o">*</span><span class="n">foregroundWindow</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIWindow</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithFrame:</span><span class="p">[[</span><span class="n">UIScreen</span> <span class="n">mainScreen</span><span class="p">]</span> <span class="n">bounds</span><span class="p">]];</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">backgroundColor</span> <span class="o">=</span> <span class="p">[</span><span class="n">UIColor</span> <span class="n">clearColor</span><span class="p">];</span>
-</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">rootViewController</span> <span class="o">=</span> <span class="p">[</span><span class="n">ForegroundViewController</span> <span class="n">new</span><span class="p">];</span>
-</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">windowLevel</span> <span class="o">=</span> <span class="n">UIWindowLevelStatusBar</span><span class="p">;</span>
-</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">hidden</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>That will display the contents of <code>ForegroundViewController</code> on top of the status bar. I&rsquo;ve put together a demo app with the above technique (combined with a sprinkle of a pan gesture and dynamics) that looks like this:</p>
-
-<p><img src="http://i.imgur.com/D0Tly5s.gif" alt="demo" width=300 /></p>
-
-<p>Download the project <a href="https://github.com/rubymaverick/Paper-StatusBarHover-Demo">over at github</a>.</p>
-
-<h4>Gotchas</h4>
-
-<p>The demo I built is probably not the end of the story. Check out <a href="http://shaune.com.au/using-multiple-uiwindows-in-ios-applications/">Shaun Ervine&rsquo;s post</a> on using multiple <code>UIWindow</code> instances for some possible issues / gotchas in using this technique.</p>
-
-		
-		
-	</div>
-
-
-<div class="meta">
-	<div class="date">
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-02-07T16:43:00+00:00" pubdate data-updated="true">Feb 7<span>th</span>, 2014</time></div>
-	<div class="tags">
-
-
-	<a class='category' href='/blog/categories/facebook/'>Facebook</a>, <a class='category' href='/blog/categories/paper/'>Paper</a>, <a class='category' href='/blog/categories/tutorial/'>Tutorial</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
 
 
 </div>

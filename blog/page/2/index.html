@@ -10,7 +10,7 @@
 
 <meta name="author" content="Eric Allam"> 
 
-<meta name="description" content="I gave my first iOS related tech talk yesterday at Alt Tech Talks London, which was a blast, especially to share the stage with such accomplished &hellip;"> <meta name="keywords" content="">
+<meta name="description" content="Among the many great little design details in the new Paper by Facebook app released last week, this status-bar-hover thing caught me by surprise. &hellip;"> <meta name="keywords" content="">
 
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -63,6 +63,79 @@
 </header>
 
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h2 class="title">
+		
+		<a href="/blog/2014/02/07/how-to-build-the-facebook-paper-status-bar-hover/">
+		
+			How to Build the Facebook Paper Status Bar Hover</a>
+	</h2>
+	<div class="entry-content">
+		<p><img src="http://i.imgur.com/SHpj1Ll.gif" alt="paper" /></p>
+
+<p>Among the <a href="http://blog.brianlovin.com/design-details-paper-by-facebook">many</a> great little design details in the new <a href="https://www.facebook.com/paper">Paper by Facebook</a> app released last week, this status-bar-hover thing caught me by surprise.  My first reaction was &ldquo;Hey, they can&rsquo;t do that!&rdquo;, but of course (and to quote my <a href="http://www.youtube.com/watch?v=3A0q36NOgdQ">favorite line</a> from Independence Day) well they just eh&hellip; did.</p>
+
+<p>After a little digging around, I&rsquo;ve figured out how to do it and it involves using multiple <strong>UIWindow</strong> instances. I&rsquo;ve always thought that iOS applications could only ever use one <code>UIWindow</code>, but that turns out to be not the case. It&rsquo;s perfectly alright to have more than the <code>[UIApplication sharedApplication].keyWindow</code> which you usually create in the AppDelegate (or Storyboard creates it for you).</p>
+
+<p>A <code>UIWindow</code> is just a subclass of <code>UIView</code>, but it&rsquo;s also a special type of view that&rsquo;s specifically for providing an area for displaying views and for distributing events to those views. A <code>UIWindow</code> instance has a property called <code>windowLevel</code> that allows you to specify where on the z-index the window appears relative to other windows in the app. Most of the time you only have your main window with a <code>windowLevel</code> set to <code>UIWindowLevelNormal</code>, and then occasionally a <code>UIAlertView</code> window is displayed with a <code>windowLevel</code> of <code>UIWindowLevelAlert</code>.</p>
+
+<p>So to create a new <code>UIWindow</code> and have it&rsquo;s contents appear above the status bar, all you have to do is this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="n">UIWindow</span> <span class="o">*</span><span class="n">foregroundWindow</span> <span class="o">=</span> <span class="p">[[</span><span class="n">UIWindow</span> <span class="n">alloc</span><span class="p">]</span> <span class="nl">initWithFrame:</span><span class="p">[[</span><span class="n">UIScreen</span> <span class="n">mainScreen</span><span class="p">]</span> <span class="n">bounds</span><span class="p">]];</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">backgroundColor</span> <span class="o">=</span> <span class="p">[</span><span class="n">UIColor</span> <span class="n">clearColor</span><span class="p">];</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">rootViewController</span> <span class="o">=</span> <span class="p">[</span><span class="n">ForegroundViewController</span> <span class="n">new</span><span class="p">];</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">windowLevel</span> <span class="o">=</span> <span class="n">UIWindowLevelStatusBar</span><span class="p">;</span>
+</span><span class='line'><span class="n">foregroundWindow</span><span class="p">.</span><span class="n">hidden</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That will display the contents of <code>ForegroundViewController</code> on top of the status bar. I&rsquo;ve put together a demo app with the above technique (combined with a sprinkle of a pan gesture and dynamics) that looks like this:</p>
+
+<p><img src="http://i.imgur.com/D0Tly5s.gif" alt="demo" width=300 /></p>
+
+<p>Download the project <a href="https://github.com/rubymaverick/Paper-StatusBarHover-Demo">over at github</a>.</p>
+
+<h4>Gotchas</h4>
+
+<p>The demo I built is probably not the end of the story. Check out <a href="http://shaune.com.au/using-multiple-uiwindows-in-ios-applications/">Shaun Ervine&rsquo;s post</a> on using multiple <code>UIWindow</code> instances for some possible issues / gotchas in using this technique.</p>
+
+		
+		
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-02-07T16:43:00+00:00" pubdate data-updated="true">Feb 7<span>th</span>, 2014</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/facebook/'>Facebook</a>, <a class='category' href='/blog/categories/paper/'>Paper</a>, <a class='category' href='/blog/categories/tutorial/'>Tutorial</a>, <a class='category' href='/blog/categories/ios/'>iOS</a>
+
+
+</div>
+	
+</div></article>
 
 
     <article class="post">

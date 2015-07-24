@@ -4,7 +4,7 @@
   <title><![CDATA[initWithFunk:]]></title>
   <link href="http://initwithfunk.com/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-07-08T12:13:22+01:00</updated>
+  <updated>2015-07-24T08:55:46+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,194 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 5: Tracking Game Changes]]></title>
+    <link href="http://initwithfunk.com/blog/2015/07/08/as-i-learn-cloudkit-syncing-part-5-tracking-game-changes/"/>
+    <updated>2015-07-08T14:08:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/07/08/as-i-learn-cloudkit-syncing-part-5-tracking-game-changes</id>
+    <content type="html"><![CDATA[<p><em>This is part 5 in a <a href="http://initwithfunk.com/blog/categories/ailcks/">series of posts</a> talking through how I built CloudKit syncing into Qiktionary</em></p>
+
+<p>In the <a href="http://initwithfunk.com/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes/">last installment</a> of this series I discussed how I was tracking newly created games.</p>
+
+<p>Tracking changes to a game that has already been synced with CloudKit has to be approached in a different way.</p>
+
+<p>The first approach I thought about using was based on time. I would track the &ldquo;last updated&rdquo; times of all the games and also track the last sync time. Then I could just query for all games with a more recent &ldquo;last updated&rdquo; value.</p>
+
+<p>I decided against that approach for a couple of reasons. I was worried I wouldn&rsquo;t be able to correctly track the last synced date when things went wrong with a sync, thus possibly letting some game updates slip through the cracks. And I also wanted to be a good CloudKit citizen and only send values that had actually changed since the last sync, and not the entire game every time there was a change.</p>
+
+<h3>The approach I&rsquo;m using</h3>
+
+<p>I decided to create a table called GameChange that stores the <code>gameID</code> and a set of <code>changedFields</code> that correspond to column names on the Game table. When a game is updated I create a GameChange record with the set of fields that have changed on the game. If there is already a GameChange record for that game, I update the GameChange&rsquo;s <code>changedFields</code> value with any new fields that have changed on that game.</p>
+
+<p>This makes it really easy to know what games have changed, all I have to do is <code>SELECT * FROM GameChange</code>. Then, after those changes have been sent to CloudKit using the <code>CKModifyRecordsOperation</code><sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>, I can just delete the GameChange record.</p>
+
+<h3>Don&rsquo;t track changes that don&rsquo;t need to be synced</h3>
+
+<p>It took me a bit to really figure this out but it may seem pretty obvious to you: only track changes to a game that need to be sent to CloudKit. For example, I ignore changes when:</p>
+
+<ul>
+<li>Updating the <code>remoteRecordID</code> field.</li>
+<li>Updating a game with new data that was fetched from CloudKit.</li>
+</ul>
+
+
+<p> I do this by having two different &ldquo;save&rdquo; methods on my Game class, <code>save</code> and <code>saveWithoutTrackingChanges</code>. The <code>save</code> method is inherited from <code>FCModel</code>, and it looks a bit like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">save</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">NSArray</span> <span class="o">*</span><span class="n">changedFieldNames</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="n">changedFieldNamesWithoutRemoteColumns</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">existsInDB</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">existsInDatabase</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">generateChanges</span> <span class="o">=</span> <span class="o">!</span><span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">saved</span> <span class="o">=</span> <span class="p">[</span><span class="n">super</span> <span class="n">save</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">saved</span> <span class="o">&amp;&amp;</span> <span class="n">generateChanges</span> <span class="o">&amp;&amp;</span> <span class="n">existsInDB</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="kt">BOOL</span> <span class="n">hasChanges</span> <span class="o">=</span> <span class="n">changedFieldNames</span><span class="p">.</span><span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">hasChanges</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="p">[</span><span class="n">GameChange</span> <span class="nl">saveChangeForGame:</span><span class="n">self</span> <span class="nl">withChangedFields:</span><span class="n">changedFieldNames</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">return</span> <span class="n">saved</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">saved</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note the call to <code>changedFieldNamesWithoutRemoteColumns</code> which returns an array of field names that have changed on the game record, filtering out the <code>remoteRecordID</code> column that we don&rsquo;t need to sync with iCloud.</p>
+
+<p>saveWithoutTrackingChanges just sets the stopSaveChangeGeneration flag around a call to <code>save</code>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">-</span> <span class="p">(</span><span class="kt">BOOL</span><span class="p">)</span><span class="nf">saveWithoutTrackingChanges</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span> <span class="o">=</span> <span class="n">YES</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">BOOL</span> <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">self</span> <span class="n">save</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">self</span><span class="p">.</span><span class="n">stopSaveChangeGeneration</span> <span class="o">=</span> <span class="n">NO</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The other important piece here is the call to <code>[GameChange saveChangeForGame:self withChangedFields:changedFieldNames]</code>, which is implemented like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class='objc'><span class='line'><span class="k">+</span> <span class="p">(</span><span class="n">instancetype</span><span class="p">)</span><span class="nf">saveChangeForGame:</span><span class="p">(</span><span class="n">Game</span> <span class="o">*</span><span class="p">)</span><span class="nv">game</span> <span class="nf">withChangedFields:</span><span class="p">(</span><span class="n">NSArray</span> <span class="o">*</span><span class="p">)</span><span class="nv">changedFields</span><span class="p">;</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">GameChange</span> <span class="o">*</span><span class="n">gameChange</span> <span class="o">=</span> <span class="p">[</span><span class="n">GameChange</span> <span class="nl">firstInstanceWhere:</span><span class="s">@&quot;gameID = ?&quot;</span><span class="p">,</span> <span class="n">game</span><span class="p">.</span><span class="n">gameID</span><span class="p">];</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">gameChange</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">gameChange</span> <span class="o">=</span> <span class="p">[</span><span class="n">GameChange</span> <span class="n">new</span><span class="p">];</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">gameID</span> <span class="o">=</span> <span class="n">game</span><span class="p">.</span><span class="n">gameID</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSSet</span> <span class="nl">setWithArray:</span><span class="n">changedFields</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="n">NSSet</span> <span class="o">*</span><span class="n">existingChangedFields</span> <span class="o">=</span> <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">NSMutableSet</span> <span class="o">*</span><span class="n">mutableChangedFields</span> <span class="o">=</span> <span class="p">[</span><span class="n">NSMutableSet</span> <span class="nl">setWithSet:</span><span class="n">existingChangedFields</span><span class="p">];</span>
+</span><span class='line'>        <span class="p">[</span><span class="n">mutableChangedFields</span> <span class="nl">addObjectsFromArray:</span><span class="n">changedFields</span><span class="p">];</span>
+</span><span class='line'>        <span class="n">gameChange</span><span class="p">.</span><span class="n">changedFields</span> <span class="o">=</span> <span class="n">mutableChangedFields</span><span class="p">.</span><span class="n">copy</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">([</span><span class="n">gameChange</span> <span class="n">save</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">gameChange</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="nb">nil</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Bonus: tracking game deletions</h3>
+
+<p>I take a similar approach to tracking when a local game is deleted. I have a GameDeletion table that stores the <code>CKRecordID</code> of any game that has been deleted (and has already been synced to iCloud). I don&rsquo;t keep the local Game record in the database either (with something like a <code>deleted</code> BOOL to mark it as deleted). The Game record is really deleted from the database, along with it&rsquo;s corresponding RemoteRecord entry.</p>
+
+<p>When I&rsquo;m setting up my <code>CKModifyRecordsOperation</code>, all I have to do is <code>SELECT * FROM GameDeletion</code>. Then after the operation succeeds, I can delete the GameDeletion record.</p>
+
+<h3>Tracking complete</h3>
+
+<p>If you recall the syncing recipe is as follows:</p>
+
+<ol>
+<li> Track local changes</li>
+<li> Send changes to the server</li>
+<li> Resolve conflicts</li>
+<li> Fetch server changes with <code>CKFetchRecordChangesOperation</code></li>
+<li> Apply server changes</li>
+<li> Save server change token</li>
+</ol>
+
+
+<p>Now that I&rsquo;ve tracked all the local changes I need to track, it&rsquo;ll finally be time to start sending those changes to the server. That I will start covering in my next post.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;ll eventually get to how I&rsquo;m using the <code>CKModifyRecordsOperation</code> to send all these local changes to CloudKit.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 4: Tracking Local Changes]]></title>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Sync | initWithFunk:]]></title>
   <link href="http://initwithfunk.com/blog/categories/sync/atom.xml" rel="self"/>
   <link href="http://initwithfunk.com/"/>
-  <updated>2015-07-08T12:13:22+01:00</updated>
+  <updated>2015-07-24T08:55:46+01:00</updated>
   <id>http://initwithfunk.com/</id>
   <author>
     <name><![CDATA[Eric Allam]]></name>
@@ -12,6 +12,149 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 5: Tracking Game Changes]]></title>
+    <link href="http://initwithfunk.com/blog/2015/07/08/as-i-learn-cloudkit-syncing-part-5-tracking-game-changes/"/>
+    <updated>2015-07-08T14:08:00+01:00</updated>
+    <id>http://initwithfunk.com/blog/2015/07/08/as-i-learn-cloudkit-syncing-part-5-tracking-game-changes</id>
+    <content type="html"><![CDATA[<p><em>This is part 5 in a <a href="http://initwithfunk.com/blog/categories/ailcks/">series of posts</a> talking through how I built CloudKit syncing into Qiktionary</em></p>
+
+<p>In the <a href="http://initwithfunk.com/blog/2015/07/07/as-i-learn-cloudkit-syncing-part-4-tracking-local-changes/">last installment</a> of this series I discussed how I was tracking newly created games.</p>
+
+<p>Tracking changes to a game that has already been synced with CloudKit has to be approached in a different way.</p>
+
+<p>The first approach I thought about using was based on time. I would track the &ldquo;last updated&rdquo; times of all the games and also track the last sync time. Then I could just query for all games with a more recent &ldquo;last updated&rdquo; value.</p>
+
+<p>I decided against that approach for a couple of reasons. I was worried I wouldn&rsquo;t be able to correctly track the last synced date when things went wrong with a sync, thus possibly letting some game updates slip through the cracks. And I also wanted to be a good CloudKit citizen and only send values that had actually changed since the last sync, and not the entire game every time there was a change.</p>
+
+<h3>The approach I&rsquo;m using</h3>
+
+<p>I decided to create a table called GameChange that stores the <code>gameID</code> and a set of <code>changedFields</code> that correspond to column names on the Game table. When a game is updated I create a GameChange record with the set of fields that have changed on the game. If there is already a GameChange record for that game, I update the GameChange&rsquo;s <code>changedFields</code> value with any new fields that have changed on that game.</p>
+
+<p>This makes it really easy to know what games have changed, all I have to do is <code>SELECT * FROM GameChange</code>. Then, after those changes have been sent to CloudKit using the <code>CKModifyRecordsOperation</code><sup id="fnref:1"><a href="#fn:1" rel="footnote">1</a></sup>, I can just delete the GameChange record.</p>
+
+<h3>Don&rsquo;t track changes that don&rsquo;t need to be synced</h3>
+
+<p>It took me a bit to really figure this out but it may seem pretty obvious to you: only track changes to a game that need to be sent to CloudKit. For example, I ignore changes when:</p>
+
+<ul>
+<li>Updating the <code>remoteRecordID</code> field.</li>
+<li>Updating a game with new data that was fetched from CloudKit.</li>
+</ul>
+
+
+<p> I do this by having two different &ldquo;save&rdquo; methods on my Game class, <code>save</code> and <code>saveWithoutTrackingChanges</code>. The <code>save</code> method is inherited from <code>FCModel</code>, and it looks a bit like this:</p>
+
+<p>```objc
+&ndash; (BOOL)save
+{</p>
+
+<pre><code>NSArray *changedFieldNames = [self changedFieldNamesWithoutRemoteColumns];
+
+BOOL existsInDB = self.existsInDatabase;
+BOOL generateChanges = !self.stopSaveChangeGeneration;
+
+BOOL saved = [super save];
+
+if (saved &amp;&amp; generateChanges &amp;&amp; existsInDB) {
+
+    BOOL hasChanges = changedFieldNames.count &gt; 0;
+
+    if (hasChanges) {
+        [GameChange saveChangeForGame:self withChangedFields:changedFieldNames];
+    }
+
+    return saved;
+
+}else{
+    return saved;
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Note the call to <code>changedFieldNamesWithoutRemoteColumns</code> which returns an array of field names that have changed on the game record, filtering out the <code>remoteRecordID</code> column that we don&rsquo;t need to sync with iCloud.</p>
+
+<p>saveWithoutTrackingChanges just sets the stopSaveChangeGeneration flag around a call to <code>save</code>:</p>
+
+<p>```objc
+&ndash; (BOOL)saveWithoutTrackingChanges
+{</p>
+
+<pre><code>self.stopSaveChangeGeneration = YES;
+
+BOOL result = [self save];
+
+self.stopSaveChangeGeneration = NO;
+
+return result;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>The other important piece here is the call to <code>[GameChange saveChangeForGame:self withChangedFields:changedFieldNames]</code>, which is implemented like so:</p>
+
+<p>```objc
++ (instancetype)saveChangeForGame:(Game <em>)game withChangedFields:(NSArray </em>)changedFields;
+{</p>
+
+<pre><code>GameChange *gameChange = [GameChange firstInstanceWhere:@"gameID = ?", game.gameID];
+
+if (!gameChange) {
+    gameChange = [GameChange new];
+    gameChange.gameID = game.gameID;
+    gameChange.changedFields = [NSSet setWithArray:changedFields];
+}else{
+    NSSet *existingChangedFields = gameChange.changedFields;
+    NSMutableSet *mutableChangedFields = [NSMutableSet setWithSet:existingChangedFields];
+    [mutableChangedFields addObjectsFromArray:changedFields];
+    gameChange.changedFields = mutableChangedFields.copy;
+}
+
+if ([gameChange save]) {
+    return gameChange;
+}else{
+    return nil;
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Bonus: tracking game deletions</h3>
+
+<p>I take a similar approach to tracking when a local game is deleted. I have a GameDeletion table that stores the <code>CKRecordID</code> of any game that has been deleted (and has already been synced to iCloud). I don&rsquo;t keep the local Game record in the database either (with something like a <code>deleted</code> BOOL to mark it as deleted). The Game record is really deleted from the database, along with it&rsquo;s corresponding RemoteRecord entry.</p>
+
+<p>When I&rsquo;m setting up my <code>CKModifyRecordsOperation</code>, all I have to do is <code>SELECT * FROM GameDeletion</code>. Then after the operation succeeds, I can delete the GameDeletion record.</p>
+
+<h3>Tracking complete</h3>
+
+<p>If you recall the syncing recipe is as follows:</p>
+
+<ol>
+<li> Track local changes</li>
+<li> Send changes to the server</li>
+<li> Resolve conflicts</li>
+<li> Fetch server changes with <code>CKFetchRecordChangesOperation</code></li>
+<li> Apply server changes</li>
+<li> Save server change token</li>
+</ol>
+
+
+<p>Now that I&rsquo;ve tracked all the local changes I need to track, it&rsquo;ll finally be time to start sending those changes to the server. That I will start covering in my next post.</p>
+<div class="footnotes">
+<hr/>
+<ol>
+<li id="fn:1">
+<p>I&rsquo;ll eventually get to how I&rsquo;m using the <code>CKModifyRecordsOperation</code> to send all these local changes to CloudKit.<a href="#fnref:1" rev="footnote">&#8617;</a></p></li>
+</ol>
+</div>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 4: Tracking Local Changes]]></title>
@@ -294,48 +437,6 @@ NSArray *newLocalGames = [Game instancesWhere:@"remoteRecordID IS NULL"];
 <p>Since I am a couple of days into this now, I think I have a couple of these questions nailed down (I&rsquo;ve even written some code so a few of those answers have survived that test), but many are still open questions, which I will trying to answer as this work (and this series) continues for the next couple of weeks.</p>
 
 <p>Stay tuned for <a href="http://initwithfunk.com/blog/2015/06/29/ailcks-part-2-keeping-things-simple">Part 2</a>. Get notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[As I Learn CloudKit Syncing - Part 0]]></title>
-    <link href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0/"/>
-    <updated>2015-06-26T12:40:00+01:00</updated>
-    <id>http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-part-0</id>
-    <content type="html"><![CDATA[<p><img src='http://f.cl.ly/items/1V343x033m0j352I1S40/Screen%20Shot%202015-06-26%20at%201.57.23%20pm.png' style="-webkit-box-shadow: 0 0 0px !important; box-shadow: 0 0 0px !important; -moz-box-shadow: 0 0 0px !important;" /></p>
-
-<p>We released <a href="http://qiktionary.com">Qiktionary</a> a little over a month ago. It&rsquo;s a playful word game that allows players to unlock interesting facts by solving a mastermindish word puzzle. There are two modes: single player (the main game) and multiplayer where you can challenge your friends on Game Center to a round of three games. Qiktionary works on both iPhone and iPad.</p>
-
-<p>Since it works on both the iPhone and the iPad, we considered the possibility of adding syncing. We knew some people would play on both their iPhone and iPad and would want their games to sync to all their devices. Multiplayer is built on top of Game Center matchmaking so we already have syncing there taken care of; but single player data is all just stored locally in a sqlite database.</p>
-
-<p>I punted on syncing until a week ago when I started implementing Game Center leaderboards and achievements for the single player game. Without syncing, the following scenario is likely to happen to people that play on both an iPhone and an iPad on the same Game Center account:</p>
-
-<ul>
-<li>Play many games on their iPhone, earning achievements that unlock prizes and rocket them up the leaderboard. The sqlite database on their iPhone diligently holds the records for all these games played. Game Center stores the info about their leaderboard scores and achievements</li>
-<li>Put down their iPhone and pick up their iPad, which doesn&rsquo;t know anything about all those games hidden away on their iPhone</li>
-<li>Qiktionary on the iPad shows them all these achievements they&rsquo;ve earned even though locally they haven&rsquo;t played a single game.</li>
-<li>Play a game on their iPad. Qiktionary updates their score on the leaderboard based on that single game. Player rockets back down the leaderboard. Qiktionary also attempted to award them the &ldquo;played your first game&rdquo; achievement even though they&rsquo;ve already played many games on their iPhone.</li>
-<li>Player is sad.</li>
-<li>Player leaves bad review on App Store.</li>
-<li>Qiktionary is sad.</li>
-</ul>
-
-
-<p>So it seems to me that there is no way of <a href="http://stackoverflow.com/questions/31007080/how-have-you-dealt-with-with-game-center-leaderboards-in-your-universal-game">getting around implementing syncing</a> when doing Game Center leaderboards/achievements for a univeral iOS game.</p>
-
-<p>Which brings me to CloudKit.</p>
-
-<p>I don&rsquo;t have a lot of time to build in syncing. I&rsquo;m not going to be running my own servers. There isn&rsquo;t a ton of data to sync (if a player completely finishes Qiktionary they will have only generated at most 10MB). Qiktionary for now is iOS only and even if we do expand to other platforms I&rsquo;m okay with the new CloudKit REST and JS APIs being sufficient to support that move. CloudKit also has nice support for this type of syncing strategy (which they call tiny data, all devices).</p>
-
-<p>So: CloudKit. This is what I&rsquo;m using and I&rsquo;ve been learning all I can about it the last couple of days. I&rsquo;ve watched all the WWDC sessions (some multiple times). <a href="https://developer.apple.com/videos/wwdc/2014/?id=208">Introducing CloudKit</a> and <a href="https://developer.apple.com/videos/wwdc/2014/?id=231">Advanced CloudKit</a> from last year and <a href="https://developer.apple.com/videos/wwdc/2015/?id=715">CloudKit Tips and Tricks</a> from this year were especially helpful. The <a href="https://developer.apple.com/videos/wwdc/2015/?id=226">Advanced NSOperations</a> talk from this year has also given me a strategy for working with CloudKit operations that I think I am happy with (I&rsquo;ll cover this in a future post). There isn&rsquo;t a ton of Sample Code but I&rsquo;ve learned some from the <a href="https://developer.apple.com/library/prerelease/ios/samplecode/CloudAtlas/Introduction/Intro.html">CloudKit Catalog</a> and the <a href="https://cdn.apple-cloudkit.com/cloudkit-catalog/">live JS version</a> is pretty helpful for quickly getting a feel for the APIs. I&rsquo;ve also learned a lot by looking at the source for the newly released <a href="https://github.com/CloudKitSpace/CKSIncrementalStore">CKSIncrementalStore</a>.</p>
-
-<p>There are a decent amount of CloudKit tutorials out there but I&rsquo;ve found most of them are focused on the Big Data, Tiny Phone strategy of CloudKit. This is the strategy used by things like iCloud Photos.</p>
-
-<p>Which is why I am writing this series (shamefully copying David Smith&rsquo;s <a href="https://david-smith.org/watchkit/">As I Learn watchOS</a> series). I&rsquo;ve just started implementing sync but I am going to try and talk through some of the problems I run into and figure out which things work and which things don&rsquo;t.</p>
-
-<p>Stay tuned for <a href="http://initwithfunk.com/blog/2015/06/26/as-i-learn-cloudkit-syncing-part-1/">Part 1</a> where I will be talking through the &ldquo;Tiny Data, All Devices&rdquo; strategy of CloudKit.</p>
-
-<p>Be notified of new posts by <a href="http://twitter.com/eallam">following me on Twitter</a>. In the meantime <a href="http://qiktionary.com">download Qiktionary</a> and learn some cool facts :).</p>
 ]]></content>
   </entry>
   
